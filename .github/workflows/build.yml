@@ -20,6 +20,12 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
 
+    - name: Install System Gradle & Generate Wrapper
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gradle
+        gradle wrapper
+
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
