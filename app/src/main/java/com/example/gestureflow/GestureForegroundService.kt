@@ -11,6 +11,7 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.hardware.camera2.CameraManager
+import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -32,26 +33,30 @@ class GestureForegroundService : Service(), SensorEventListener {
 
     override fun onCreate() {
         super.onCreate()
-        sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
         
+        // Start foreground notification immediately to avoid Android crash exceptions
+        startForeground(1, createNotification())
+
         try {
+            sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+            accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+            accelerometer?.let {
+                sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
+            }
+
             cameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
             cameraId = cameraManager?.cameraIdList?.getOrNull(0)
         } catch (e: Exception) {
             e.printStackTrace()
         }
-
-        startForeground(1, createNotification())
-        accelerometer?.let {
-            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
-        }
     }
 
     private fun createNotification(): Notification {
         val channelId = "moto_service_channel"
-        val channel = NotificationChannel(channelId, "Moto Actions Service", NotificationManager.IMPORTANCE_LOW)
-        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(channelId, "Moto Actions Service", NotificationManager.IMPORTANCE_LOW)
+            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        }
 
         return NotificationCompat.Builder(this, channelId)
             .setContentTitle("Moto Actions Running")
@@ -80,7 +85,7 @@ class GestureForegroundService : Service(), SensorEventListener {
                 handler.post { openCamera() }
             } else if (z < -8.5 && prefs.getInt("flip", 0) == 0) {
                 lastTrigger = now
-                handler.post { showToast("Phone placed face down (Muted)") }
+                handler.post { showToast("Phone placed face down") }
             } else if (gForce > 2.0 && abs(z) < 3.0 && prefs.getInt("shake", 0) == 0) {
                 lastTrigger = now
                 handler.post { openApp("com.whatsapp") }
@@ -117,7 +122,7 @@ class GestureForegroundService : Service(), SensorEventListener {
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 startActivity(intent)
             } else {
-                showToast("Target app not installed")
+                showToast("WhatsApp not installed")
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -133,8 +138,8 @@ class GestureForegroundService : Service(), SensorEventListener {
 
     override fun onDestroy() {
         super.onDestroy()
-        sensorManager.unregisterListener(this)
         try {
+            sensorManager.unregisterListener(this)
             cameraId?.let { cameraManager?.setTorchMode(it, false) }
         } catch (e: Exception) {
             e.printStackTrace()
