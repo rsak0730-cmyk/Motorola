@@ -34,8 +34,12 @@ class GestureForegroundService : Service(), SensorEventListener {
     override fun onCreate() {
         super.onCreate()
         
-        // Start foreground notification immediately to avoid Android crash exceptions
-        startForeground(1, createNotification())
+        // Immediate foreground notification to satisfy Android OS rules
+        try {
+            startForeground(1, createNotification())
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
 
         try {
             sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
