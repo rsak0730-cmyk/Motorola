@@ -37,4 +37,3 @@ class GestureClassifier(assetManager: AssetManager) {
         return outputBuffer[0]
     }
 }
-
