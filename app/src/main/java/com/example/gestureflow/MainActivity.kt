@@ -55,17 +55,37 @@ class MainActivity : AppCompatActivity() {
                 putInt("shake", spinnerShake.selectedItemPosition)
                 apply()
             }
-            checkPermissionsAndStartService()
+            checkAllPermissionsAndStart()
         }
     }
 
-    private fun checkPermissionsAndStartService() {
+    private fun checkAllPermissionsAndStart() {
+        val permissionsNeeded = mutableListOf<String>()
+        
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 101)
-                return
+                permissionsNeeded.add(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            permissionsNeeded.add(Manifest.permission.CAMERA)
+        }
+
+        if (permissionsNeeded.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, permissionsNeeded.toTypedArray(), 101)
+        } else {
+            startMotoService()
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 101) {
+            startMotoService()
+        }
+    }
+
+    private fun startMotoService() {
         val intent = Intent(this, GestureForegroundService::class.java)
         ContextCompat.startForegroundService(this, intent)
         statusTextView.text = "Status: Moto Actions Active"
