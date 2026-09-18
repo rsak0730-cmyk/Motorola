@@ -24,7 +24,7 @@ class GestureForegroundService : Service(), SensorEventListener {
 
     private lateinit var sensorManager: SensorManager
     private var accelerometer: Sensor? = null
-    private lateinit var cameraManager: CameraManager
+    private var cameraManager: CameraManager? = null
     private var cameraId: String? = null
     private var isFlashOn = false
     private val handler = Handler(Looper.getMainLooper())
@@ -35,8 +35,12 @@ class GestureForegroundService : Service(), SensorEventListener {
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
         
-        cameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
-        cameraId = cameraManager.cameraIdList.getOrNull(0)
+        try {
+            cameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
+            cameraId = cameraManager?.cameraIdList?.getOrNull(0)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
 
         startForeground(1, createNotification())
         accelerometer?.let {
@@ -68,23 +72,16 @@ class GestureForegroundService : Service(), SensorEventListener {
 
             val prefs = getSharedPreferences("MotoPrefs", Context.MODE_PRIVATE)
 
-            // 1. Chop Gesture (Fast Flashlight)
             if (gForce > 2.7 && prefs.getInt("chop", 0) == 0) {
                 lastTrigger = now
                 handler.post { toggleFlashlight() }
-            }
-            // 2. Twist Gesture (Quick Camera Capture)
-            else if (abs(x) > 8.5 && abs(y) < 3.0 && prefs.getInt("twist", 0) == 0) {
+            } else if (abs(x) > 8.5 && abs(y) < 3.0 && prefs.getInt("twist", 0) == 0) {
                 lastTrigger = now
                 handler.post { openCamera() }
-            }
-            // 3. Flip / Face Down (Silence / Toast notification)
-            else if (z < -8.5 && prefs.getInt("flip", 0) == 0) {
+            } else if (z < -8.5 && prefs.getInt("flip", 0) == 0) {
                 lastTrigger = now
                 handler.post { showToast("Phone placed face down (Muted)") }
-            }
-            // 4. Shake Gesture (Open WhatsApp)
-            else if (gForce > 2.0 && abs(z) < 3.0 && prefs.getInt("shake", 0) == 0) {
+            } else if (gForce > 2.0 && abs(z) < 3.0 && prefs.getInt("shake", 0) == 0) {
                 lastTrigger = now
                 handler.post { openApp("com.whatsapp") }
             }
@@ -92,26 +89,38 @@ class GestureForegroundService : Service(), SensorEventListener {
     }
 
     private fun toggleFlashlight() {
-        cameraId?.let { id ->
-            isFlashOn = !isFlashOn
-            cameraManager.setTorchMode(id, isFlashOn)
+        try {
+            cameraId?.let { id ->
+                isFlashOn = !isFlashOn
+                cameraManager?.setTorchMode(id, isFlashOn)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
     private fun openCamera() {
-        val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        try {
+            val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            showToast("Camera launch failed")
         }
-        startActivity(intent)
     }
 
     private fun openApp(pkg: String) {
-        val intent = packageManager.getLaunchIntentForPackage(pkg)
-        if (intent != null) {
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            startActivity(intent)
-        } else {
-            showToast("Target app not installed")
+        try {
+            val intent = packageManager.getLaunchIntentForPackage(pkg)
+            if (intent != null) {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                startActivity(intent)
+            } else {
+                showToast("Target app not installed")
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
@@ -125,6 +134,10 @@ class GestureForegroundService : Service(), SensorEventListener {
     override fun onDestroy() {
         super.onDestroy()
         sensorManager.unregisterListener(this)
-        cameraId?.let { cameraManager.setTorchMode(it, false) }
+        try {
+            cameraId?.let { cameraManager?.setTorchMode(it, false) }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 }
