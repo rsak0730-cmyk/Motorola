@@ -2,6 +2,7 @@ package com.example.gestureflow
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.hardware.Sensor
 import android.hardware.SensorEvent
@@ -10,8 +11,9 @@ import android.hardware.SensorManager
 import android.hardware.camera2.CameraManager
 import android.os.Build
 import android.os.Bundle
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.provider.MediaStore
-import android.content.Intent
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.Spinner
@@ -35,6 +37,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var accelerometer: Sensor? = null
     private var cameraManager: CameraManager? = null
     private var cameraId: String? = null
+    private var vibrator: Vibrator? = null
+
     private var isListening = false
     private var isFlashOn = false
     private var lastTrigger: Long = 0
@@ -66,7 +70,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-        
+        vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator?
+
         try {
             cameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
             cameraId = cameraManager?.cameraIdList?.getOrNull(0)
@@ -100,8 +105,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             accelerometer?.let {
                 sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
             }
-            statusTextView.text = "Status: Moto Actions Active & Listening"
-            Toast.makeText(this, "Gestures Enabled!", Toast.LENGTH_SHORT).show()
+            statusTextView.text = "Status: Moto Actions Active (Listening...)"
+            Toast.makeText(this, "Gestures Enabled! Shake or Chop phone.", Toast.LENGTH_SHORT).show()
         } else {
             sensorManager.unregisterListener(this)
             statusTextView.text = "Status: Service Stopped"
@@ -113,28 +118,55 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         if (!isListening) return
         if (event?.sensor?.type == Sensor.TYPE_ACCELEROMETER) {
             val now = System.currentTimeMillis()
-            if (now - lastTrigger < 1500) return
+            if (now - lastTrigger < 1200) return // Cooldown to prevent double triggering
 
             val x = event.values[0]
             val y = event.values[1]
             val z = event.values[2]
-            val gForce = sqrt((x * x + y * y + z * z).toDouble()) / 9.81
+            
+            // Calculate total acceleration minus gravity (9.81)
+            val totalForce = sqrt((x * x + y * y + z * z).toDouble())
+            val gForce = abs(totalForce - 9.81) / 9.81
 
             val prefs = getSharedPreferences("MotoPrefs", Context.MODE_PRIVATE)
 
-            if (gForce > 2.7 && prefs.getInt("chop", 0) == 0) {
+            // 1. Chop Gesture (Flashlight) - Requires sharp downward/sideways chop movement
+            if (gForce > 1.8 && prefs.getInt("chop", 0) == 0) {
                 lastTrigger = now
+                vibratePhone()
                 toggleFlashlight()
-            } else if (abs(x) > 8.5 && abs(y) < 3.0 && prefs.getInt("twist", 0) == 0) {
+            }
+            // 2. Twist Gesture (Camera) - Rapid rotation along the X or Y axis
+            else if ((abs(x) > 6.0 || abs(y) > 6.0) && prefs.getInt("twist", 0) == 0) {
                 lastTrigger = now
+                vibratePhone()
                 openCamera()
-            } else if (z < -8.5 && prefs.getInt("flip", 0) == 0) {
+            }
+            // 3. Flip / Face Down - Z axis points straight down into a surface
+            else if (z < -8.0 && prefs.getInt("flip", 0) == 0) {
                 lastTrigger = now
-                Toast.makeText(this, "Phone placed face down", Toast.LENGTH_SHORT).show()
-            } else if (gForce > 2.0 && abs(z) < 3.0 && prefs.getInt("shake", 0) == 0) {
+                vibratePhone()
+                Toast.makeText(this, "Phone Face Down Triggered", Toast.LENGTH_SHORT).show()
+            }
+            // 4. Shake Gesture - Quick rhythmic back-and-forth motion
+            else if (gForce > 1.3 && abs(z) < 5.0 && prefs.getInt("shake", 0) == 0) {
                 lastTrigger = now
+                vibratePhone()
                 openApp("com.whatsapp")
             }
+        }
+    }
+
+    private fun vibratePhone() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator?.vibrate(VibrationEffect.createOneShot(150, VibrationEffect.DEFAULT_AMPLITUDE))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator?.vibrate(150)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
