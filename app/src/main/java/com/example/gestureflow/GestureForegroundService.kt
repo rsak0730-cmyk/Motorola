@@ -14,8 +14,10 @@ import android.hardware.camera2.CameraManager
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.provider.MediaStore
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
+import kotlin.math.abs
 import kotlin.math.sqrt
 
 class GestureForegroundService : Service(), SensorEventListener {
@@ -26,6 +28,7 @@ class GestureForegroundService : Service(), SensorEventListener {
     private var cameraId: String? = null
     private var isFlashOn = false
     private val handler = Handler(Looper.getMainLooper())
+    private var lastTrigger: Long = 0
 
     override fun onCreate() {
         super.onCreate()
@@ -33,92 +36,95 @@ class GestureForegroundService : Service(), SensorEventListener {
         accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
         
         cameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
-        try {
-            cameraId = cameraManager.cameraIdList.getOrNull(0)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        cameraId = cameraManager.cameraIdList.getOrNull(0)
 
         startForeground(1, createNotification())
-        
         accelerometer?.let {
             sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
         }
     }
 
     private fun createNotification(): Notification {
-        val channelId = "gesture_service_channel"
-        val channel = NotificationChannel(channelId, "Gesture Service", NotificationManager.IMPORTANCE_LOW)
-        val manager = getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(channel)
+        val channelId = "moto_service_channel"
+        val channel = NotificationChannel(channelId, "Moto Actions Service", NotificationManager.IMPORTANCE_LOW)
+        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
 
         return NotificationCompat.Builder(this, channelId)
-            .setContentTitle("GestureFlow Customizer Active")
-            .setContentText("Listening for custom gestures...")
+            .setContentTitle("Moto Actions Running")
+            .setContentText("Active background gesture recognizer...")
             .setSmallIcon(android.R.drawable.ic_menu_compass)
             .build()
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
         if (event?.sensor?.type == Sensor.TYPE_ACCELEROMETER) {
+            val now = System.currentTimeMillis()
+            if (now - lastTrigger < 1500) return
+
             val x = event.values[0]
             val y = event.values[1]
             val z = event.values[2]
+            val gForce = sqrt((x * x + y * y + z * z).toDouble()) / 9.81
 
-            val acceleration = sqrt((x * x + y * y + z * z).toDouble()) - 9.81
+            val prefs = getSharedPreferences("MotoPrefs", Context.MODE_PRIVATE)
 
-            // Simulated trigger mapping for demonstration of custom actions
-            if (acceleration > 7.5) {
-                triggerActionForGesture("chop")
-            } else if (acceleration < -6.5) {
-                triggerActionForGesture("twist")
+            // 1. Chop Gesture (Fast Flashlight)
+            if (gForce > 2.7 && prefs.getInt("chop", 0) == 0) {
+                lastTrigger = now
+                handler.post { toggleFlashlight() }
             }
-        }
-    }
-
-    private fun triggerActionForGesture(gestureType: String) {
-        val prefs = getSharedPreferences("GesturePrefs", Context.MODE_PRIVATE)
-        val actionIndex = if (gestureType == "chop") {
-            prefs.getInt("chop_action", 0)
-        } else {
-            prefs.getInt("twist_action", 1)
-        }
-
-        handler.post {
-            when (actionIndex) {
-                0 -> toggleFlashlight()
-                1 -> showToast("Gesture detected: $gestureType triggered!")
-                else -> { /* Do nothing */ }
+            // 2. Twist Gesture (Quick Camera Capture)
+            else if (abs(x) > 8.5 && abs(y) < 3.0 && prefs.getInt("twist", 0) == 0) {
+                lastTrigger = now
+                handler.post { openCamera() }
+            }
+            // 3. Flip / Face Down (Silence / Toast notification)
+            else if (z < -8.5 && prefs.getInt("flip", 0) == 0) {
+                lastTrigger = now
+                handler.post { showToast("Phone placed face down (Muted)") }
+            }
+            // 4. Shake Gesture (Open WhatsApp)
+            else if (gForce > 2.0 && abs(z) < 3.0 && prefs.getInt("shake", 0) == 0) {
+                lastTrigger = now
+                handler.post { openApp("com.whatsapp") }
             }
         }
     }
 
     private fun toggleFlashlight() {
         cameraId?.let { id ->
-            try {
-                isFlashOn = !isFlashOn
-                cameraManager.setTorchMode(id, isFlashOn)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+            isFlashOn = !isFlashOn
+            cameraManager.setTorchMode(id, isFlashOn)
         }
     }
 
-    private fun showToast(message: String) {
-        Toast.makeText(applicationContext, message, Toast.LENGTH_SHORT).show()
+    private fun openCamera() {
+        val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        startActivity(intent)
+    }
+
+    private fun openApp(pkg: String) {
+        val intent = packageManager.getLaunchIntentForPackage(pkg)
+        if (intent != null) {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(intent)
+        } else {
+            showToast("Target app not installed")
+        }
+    }
+
+    private fun showToast(msg: String) {
+        Toast.makeText(applicationContext, msg, Toast.LENGTH_SHORT).show()
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
-
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
         super.onDestroy()
         sensorManager.unregisterListener(this)
-        try {
-            cameraId?.let { cameraManager.setTorchMode(it, false) }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        cameraId?.let { cameraManager.setTorchMode(it, false) }
     }
 }
