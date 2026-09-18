@@ -11,7 +11,10 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.hardware.camera2.CameraManager
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import kotlin.math.sqrt
 
@@ -19,17 +22,13 @@ class GestureForegroundService : Service(), SensorEventListener {
 
     private lateinit var sensorManager: SensorManager
     private var accelerometer: Sensor? = null
-    private lateinit var classifier: GestureClassifier
     private lateinit var cameraManager: CameraManager
     private var cameraId: String? = null
     private var isFlashOn = false
-
-    private val accelBuffer = FloatArray(50)
-    private var bufferIndex = 0
+    private val handler = Handler(Looper.getMainLooper())
 
     override fun onCreate() {
         super.onCreate()
-        classifier = GestureClassifier(assets)
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
         
@@ -54,8 +53,8 @@ class GestureForegroundService : Service(), SensorEventListener {
         manager.createNotificationChannel(channel)
 
         return NotificationCompat.Builder(this, channelId)
-            .setContentTitle("GestureFlow AI Active")
-            .setContentText("Listening for gestures to toggle flashlight...")
+            .setContentTitle("GestureFlow Customizer Active")
+            .setContentText("Listening for custom gestures...")
             .setSmallIcon(android.R.drawable.ic_menu_compass)
             .build()
     }
@@ -66,12 +65,30 @@ class GestureForegroundService : Service(), SensorEventListener {
             val y = event.values[1]
             val z = event.values[2]
 
-            // Calculate total acceleration force magnitude
             val acceleration = sqrt((x * x + y * y + z * z).toDouble()) - 9.81
 
-            // Simple robust motion trigger for quick chop/shake gestures
-            if (acceleration > 7.0) { // Sharp movement detected
-                toggleFlashlight()
+            // Simulated trigger mapping for demonstration of custom actions
+            if (acceleration > 7.5) {
+                triggerActionForGesture("chop")
+            } else if (acceleration < -6.5) {
+                triggerActionForGesture("twist")
+            }
+        }
+    }
+
+    private fun triggerActionForGesture(gestureType: String) {
+        val prefs = getSharedPreferences("GesturePrefs", Context.MODE_PRIVATE)
+        val actionIndex = if (gestureType == "chop") {
+            prefs.getInt("chop_action", 0)
+        } else {
+            prefs.getInt("twist_action", 1)
+        }
+
+        handler.post {
+            when (actionIndex) {
+                0 -> toggleFlashlight()
+                1 -> showToast("Gesture detected: $gestureType triggered!")
+                else -> { /* Do nothing */ }
             }
         }
     }
@@ -85,6 +102,10 @@ class GestureForegroundService : Service(), SensorEventListener {
                 e.printStackTrace()
             }
         }
+    }
+
+    private fun showToast(message: String) {
+        Toast.makeText(applicationContext, message, Toast.LENGTH_SHORT).show()
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
