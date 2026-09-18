@@ -55,39 +55,43 @@ class MainActivity : AppCompatActivity() {
                 putInt("shake", spinnerShake.selectedItemPosition)
                 apply()
             }
-            checkAllPermissionsAndStart()
+            requestPermissionsAndStart()
         }
     }
 
-    private fun checkAllPermissionsAndStart() {
-        val permissionsNeeded = mutableListOf<String>()
-        
+    private fun requestPermissionsAndStart() {
+        val permissions = mutableListOf(Manifest.permission.CAMERA)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                permissionsNeeded.add(Manifest.permission.POST_NOTIFICATIONS)
-            }
-        }
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            permissionsNeeded.add(Manifest.permission.CAMERA)
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
         }
 
-        if (permissionsNeeded.isNotEmpty()) {
-            ActivityCompat.requestPermissions(this, permissionsNeeded.toTypedArray(), 101)
+        val missing = permissions.any {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+
+        if (missing) {
+            ActivityCompat.requestPermissions(this, permissions.toTypedArray(), 101)
         } else {
-            startMotoService()
+            startServiceSafely()
         }
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 101) {
-            startMotoService()
-        }
+        startServiceSafely()
     }
 
-    private fun startMotoService() {
-        val intent = Intent(this, GestureForegroundService::class.java)
-        ContextCompat.startForegroundService(this, intent)
-        statusTextView.text = "Status: Moto Actions Active"
+    private fun startServiceSafely() {
+        try {
+            val intent = Intent(this, GestureForegroundService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
+            statusTextView.text = "Status: Moto Actions Active"
+        } catch (e: Exception) {
+            statusTextView.text = "Status: Error starting service"
+        }
     }
 }
