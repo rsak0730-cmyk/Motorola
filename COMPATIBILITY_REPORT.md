@@ -45,7 +45,7 @@ describes the logic, not a hardcoded device list.
 | Flashlight | Flash-capable camera; no permission |
 | Open camera | System camera app; no permission |
 | Launch app | Target package name |
-| Open shortcut | Pinned shortcut ID (API 25+) |
+| Invoke another app's pinned shortcut | Unsupported for ordinary third-party apps; Android restricts this to launcher-authorized callers. Use Launch application instead. |
 | Open settings | No permission |
 | Media / volume | No permission |
 | Screenshot | Opt-in accessibility service (API 30+ for `takeScreenshot`) |

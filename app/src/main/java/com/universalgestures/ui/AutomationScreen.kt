@@ -91,7 +91,7 @@ fun AutomationScreen(
                             expanded = expanded,
                             onDismissRequest = { expanded = false }
                         ) {
-                            ActionType.values().forEach { action ->
+                            ActionType.values().filterNot { it == ActionType.OPEN_SHORTCUT || it == ActionType.CUSTOM_SHORTCUT }.forEach { action ->
                                 DropdownMenuItem(
                                     text = { Text(action.name) },
                                     onClick = {

@@ -10,6 +10,8 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
 import android.os.IBinder
+import android.os.Handler
+import android.os.HandlerThread
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.media.AudioManager
@@ -34,16 +36,19 @@ import kotlinx.coroutines.launch
  * Background gesture monitoring via a foreground service.
  *
  * - Correct foreground notification (low importance).
- * - Sensor registration only while monitoring; screen-off pauses
- *   high-rate sampling to save battery.
- * - START_STICKY recovery + boot restart when monitoring is enabled.
- * - Permission-state awareness: stops cleanly if permissions are revoked.
+ * - Sensor registration only while monitoring; screen-off reduces the
+ *   sensor rate from 50 Hz to 20 Hz to reduce steady-state work.
+ * - START_STICKY recovery + best-effort boot restart when monitoring is enabled;
+ *   Android and OEM process policies may still stop a service.
+ * - Restricted actions check their permission at execution time and fail closed.
  */
 class GestureForegroundService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private lateinit var sensorHub: SensorHub
-    private lateinit var pipeline: RecognitionPipeline
+    private lateinit var sensorThread: HandlerThread
+    private lateinit var sensorHandler: Handler
+    @Volatile private lateinit var pipeline: RecognitionPipeline
     private lateinit var executor: ActionExecutor
     private lateinit var prefs: PreferencesRepository
     private var configs: Map<GestureType, GestureConfig> = emptyMap()
@@ -73,6 +78,8 @@ class GestureForegroundService : Service() {
     override fun onCreate() {
         super.onCreate()
         sensorHub = SensorHub(this)
+        sensorThread = HandlerThread("UG-Monitor-Sensors").also { it.start() }
+        sensorHandler = Handler(sensorThread.looper)
         executor = ActionExecutor(this)
         prefs = PreferencesRepository(this)
         DiagnosticsHolder.store = DiagnosticsStore()
@@ -103,7 +110,11 @@ class GestureForegroundService : Service() {
     }
 
     private fun startSensors() {
-        sensorHub.start(::processSample, samplingPeriodUs = if (screenOn) 20_000 else 50_000)
+        sensorHub.start(
+            listener = ::processSample,
+            samplingPeriodUs = if (screenOn) 20_000 else 50_000,
+            callbackHandler = sensorHandler
+        )
     }
 
     private fun restartSensorsForDisplayState() {
@@ -132,6 +143,7 @@ class GestureForegroundService : Service() {
         }
         toneGenerator?.release()
         toneGenerator = null
+        if (::sensorThread.isInitialized) sensorThread.quitSafely()
         scope.cancel()
         super.onDestroy()
     }

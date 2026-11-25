@@ -52,8 +52,8 @@ third-party apps — the app says so plainly instead of faking them.
 
 ## Actions
 
-Flashlight toggle (CameraManager), open camera, launch app, open shortcut,
-open settings, media play/pause/next/previous (MediaSession keys), volume,
+Flashlight toggle (CameraManager), open camera, launch app, open settings,
+media play/pause/next/previous (MediaSession keys), volume,
 screenshot / lock screen / open notifications (opt-in accessibility),
 DND (notification policy access), ringer mode (policy access where required).
 

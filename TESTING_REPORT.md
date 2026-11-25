@@ -10,6 +10,8 @@
 | `GestureRecognizersTest` | Double chop (+ single-peak negative), double twist, shake, flip, tilt, proximity wave, idle negative |
 | `PrecisionGateTest` | Accept, ambiguity rejection, duplicate suppression, low-confidence rejection, context rejection, pocket + walking context |
 | `CalibrationStoreTest` | Calibration lifecycle, threshold clamping to baseline band, clear |
+| `CalibrationPersistenceTest` | Positive/negative templates survive local JSON serialization and negative examples can reject a closer match |
+| `RecognitionPipelineTest` | Complete chop sequence, timing window, action eligibility, idle, walking, pocket negatives, profiles |
 
 Run: `./gradlew testDebugUnitTest` (also in CI on every push).
 

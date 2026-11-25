@@ -5,6 +5,8 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.os.Handler
+import android.os.Looper
 import com.universalgestures.core.SensorInfo
 import com.universalgestures.core.SensorSample
 import com.universalgestures.core.Vec3
@@ -66,7 +68,11 @@ class SensorHub(context: Context) : SensorEventListener {
     fun hasSensor(type: Int): Boolean =
         sensorManager.getDefaultSensor(type) != null
 
-    fun start(listener: (SensorSample) -> Unit, samplingPeriodUs: Int = 20_000) {
+    fun start(
+        listener: (SensorSample) -> Unit,
+        samplingPeriodUs: Int = 20_000,
+        callbackHandler: Handler = Handler(Looper.getMainLooper())
+    ) {
         stop()
         imu.reset()
         this.listener = listener
@@ -79,13 +85,13 @@ class SensorHub(context: Context) : SensorEventListener {
         stepDetector = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)
 
         val rate = samplingPeriodUs.coerceIn(10_000, 100_000)
-        accel?.let { sensorManager.registerListener(this, it, rate) }
-        gyro?.let { sensorManager.registerListener(this, it, rate) }
-        gravitySensor?.let { sensorManager.registerListener(this, it, rate) }
-        linearAccelSensor?.let { sensorManager.registerListener(this, it, rate) }
-        rotationVector?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL) }
-        proximity?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL) }
-        stepDetector?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL) }
+        accel?.let { sensorManager.registerListener(this, it, rate, 0, callbackHandler) }
+        gyro?.let { sensorManager.registerListener(this, it, rate, 0, callbackHandler) }
+        gravitySensor?.let { sensorManager.registerListener(this, it, rate, 0, callbackHandler) }
+        linearAccelSensor?.let { sensorManager.registerListener(this, it, rate, 0, callbackHandler) }
+        rotationVector?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL, 0, callbackHandler) }
+        proximity?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL, 0, callbackHandler) }
+        stepDetector?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL, 0, callbackHandler) }
         registered = true
     }
 

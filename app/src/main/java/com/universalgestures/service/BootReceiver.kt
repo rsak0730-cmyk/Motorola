@@ -17,7 +17,12 @@ class BootReceiver : BroadcastReceiver() {
         CoroutineScope(Dispatchers.IO).launch {
             val enabled = PreferencesRepository(appContext).monitoringEnabled.firstOrNull() ?: false
             if (enabled) {
-                GestureForegroundService.start(appContext)
+                try {
+                    GestureForegroundService.start(appContext)
+                } catch (_: Exception) {
+                    // Android/OEM background-start policy can refuse a boot-time FGS.
+                    // Monitoring remains off until the user opens the app again.
+                }
             }
         }
     }
