@@ -21,7 +21,7 @@ class ContextVerifier {
         val now = sample.timestampMs
         // SensorHub exposes a short-lived step pulse alongside other sensor
         // callbacks; deduplicate that pulse to one count per physical step.
-        if (sample.stepDetected && now - lastStepRecordedMs >= 300L) {
+        if (sample.stepDetected && (lastStepRecordedMs == Long.MIN_VALUE || now - lastStepRecordedMs >= 300L)) {
             stepTimes.add(now)
             lastStepRecordedMs = now
         }
