@@ -36,10 +36,30 @@ jobs:
           "$SDKMANAGER" --install "platforms;android-34" "build-tools;34.0.0" "platform-tools"
 
       - name: Run unit tests
-        run: ./gradlew --no-daemon testDebugUnitTest --stacktrace
+        shell: bash
+        run: |
+          set +e
+          ./gradlew --no-daemon testDebugUnitTest --stacktrace > gradle-test.log 2>&1
+          result=$?
+          cat gradle-test.log
+          if [[ $result -ne 0 ]]; then
+            detail="$(grep -E '(^e: |error:|FAILED|What went wrong|Execution failed|AssertionError|expected:|Tests run:)' gradle-test.log | tail -n 12 | tr '\n' ' ' | sed 's/%/%25/g; s/\r/%0D/g')"
+            echo "::error title=Gradle unit tests failed::${detail:-See Gradle test output above}"
+          fi
+          exit "$result"
 
       - name: Build debug APK
-        run: ./gradlew --no-daemon assembleDebug --stacktrace
+        shell: bash
+        run: |
+          set +e
+          ./gradlew --no-daemon assembleDebug --stacktrace > gradle-apk.log 2>&1
+          result=$?
+          cat gradle-apk.log
+          if [[ $result -ne 0 ]]; then
+            detail="$(grep -E '(^e: |error:|FAILED|What went wrong|Execution failed)' gradle-apk.log | tail -n 12 | tr '\n' ' ' | sed 's/%/%25/g; s/\r/%0D/g')"
+            echo "::error title=Debug APK build failed::${detail:-See Gradle build output above}"
+          fi
+          exit "$result"
 
       - name: Upload debug APK artifact
         uses: actions/upload-artifact@v4
