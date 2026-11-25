@@ -33,9 +33,6 @@ class SensorHub(context: Context) : SensorEventListener {
     private var rotationVector: Sensor? = null
     private var proximity: Sensor? = null
     private var stepDetector: Sensor? = null
-    private var pickup: Sensor? = null
-    private var tilt: Sensor? = null
-    private var significantMotion: Sensor? = null
 
     private var lastAccel = Vec3()
     private var lastGyro = Vec3()
@@ -44,9 +41,6 @@ class SensorHub(context: Context) : SensorEventListener {
     private var lastRotation: Vec3? = null
     private var lastProximity: Float? = null
     private var lastStepNanos = 0L
-    private var lastPickupNanos = 0L
-    private var lastTiltNanos = 0L
-    private var lastSignificantNanos = 0L
     private var registered = false
 
     val samplingHz: Float get() = imu.samplingHz
@@ -81,9 +75,6 @@ class SensorHub(context: Context) : SensorEventListener {
         rotationVector = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
         proximity = sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY)
         stepDetector = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)
-        pickup = sensorManager.getDefaultSensor(Sensor.TYPE_PICKUP_GESTURE)
-        tilt = sensorManager.getDefaultSensor(Sensor.TYPE_TILT_DETECTOR)
-        significantMotion = sensorManager.getDefaultSensor(Sensor.TYPE_SIGNIFICANT_MOTION)
 
         val rate = SensorManager.SENSOR_DELAY_GAME
         accel?.let { sensorManager.registerListener(this, it, rate) }
@@ -93,9 +84,6 @@ class SensorHub(context: Context) : SensorEventListener {
         rotationVector?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL) }
         proximity?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL) }
         stepDetector?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL) }
-        pickup?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL) }
-        tilt?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL) }
-        significantMotion?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL) }
         registered = true
     }
 
@@ -117,9 +105,6 @@ class SensorHub(context: Context) : SensorEventListener {
             Sensor.TYPE_ROTATION_VECTOR -> lastRotation = Vec3(values[0], values[1], values[2])
             Sensor.TYPE_PROXIMITY -> lastProximity = values[0]
             Sensor.TYPE_STEP_DETECTOR -> lastStepNanos = event.timestamp
-            Sensor.TYPE_PICKUP_GESTURE -> lastPickupNanos = event.timestamp
-            Sensor.TYPE_TILT_DETECTOR -> lastTiltNanos = event.timestamp
-            Sensor.TYPE_SIGNIFICANT_MOTION -> lastSignificantNanos = event.timestamp
             else -> return
         }
         emit(event.timestamp)
@@ -138,9 +123,9 @@ class SensorHub(context: Context) : SensorEventListener {
                 rotationVector = lastRotation,
                 proximityCm = lastProximity,
                 stepDetected = lastStepNanos != 0L && timestampNanos - lastStepNanos < 100_000_000L,
-                pickupDetected = lastPickupNanos != 0L && timestampNanos - lastPickupNanos < 100_000_000L,
-                tiltDetected = lastTiltNanos != 0L && timestampNanos - lastTiltNanos < 100_000_000L,
-                significantMotion = lastSignificantNanos != 0L && timestampNanos - lastSignificantNanos < 100_000_000L
+                pickupDetected = false,
+                tiltDetected = false,
+                significantMotion = false
             )
         )
     }

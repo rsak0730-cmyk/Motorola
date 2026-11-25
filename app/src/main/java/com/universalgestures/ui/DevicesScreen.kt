@@ -1,7 +1,6 @@
 package com.universalgestures.ui
 
 import android.content.Context
-import android.hardware.Sensor
 import android.hardware.SensorManager
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -104,22 +103,4 @@ private fun discoverSensors(context: Context): List<SensorInfo> {
     }
 }
 
-private fun sensorTypeName(type: Int): String {
-    return when (type) {
-        Sensor.TYPE_ACCELEROMETER -> "Accelerometer"
-        Sensor.TYPE_GYROSCOPE -> "Gyroscope"
-        Sensor.TYPE_MAGNETIC_FIELD -> "Magnetometer"
-        Sensor.TYPE_GRAVITY -> "Gravity"
-        Sensor.TYPE_LINEAR_ACCELERATION -> "Linear acceleration"
-        Sensor.TYPE_ROTATION_VECTOR -> "Rotation vector"
-        Sensor.TYPE_GAME_ROTATION_VECTOR -> "Game rotation vector"
-        Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR -> "Geomagnetic rotation vector"
-        Sensor.TYPE_PROXIMITY -> "Proximity"
-        Sensor.TYPE_SIGNIFICANT_MOTION -> "Significant motion"
-        Sensor.TYPE_STEP_DETECTOR -> "Step detector"
-        Sensor.TYPE_TILT_DETECTOR -> "Tilt detector"
-        Sensor.TYPE_PICKUP_GESTURE -> "Pickup gesture"
-        Sensor.TYPE_WAKE_GESTURE -> "Wake gesture"
-        else -> "Sensor($type)"
-    }
-}
+private fun sensorTypeName(type: Int): String = "Sensor type $type"

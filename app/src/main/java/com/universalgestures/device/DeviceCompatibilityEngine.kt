@@ -61,8 +61,6 @@ class DeviceCompatibilityEngine(private val context: Context) {
         val hasLinear = has(Sensor.TYPE_LINEAR_ACCELERATION)
         val hasGravity = has(Sensor.TYPE_GRAVITY)
         val hasProximity = has(Sensor.TYPE_PROXIMITY)
-        val hasPickup = has(Sensor.TYPE_PICKUP_GESTURE)
-        val hasTilt = has(Sensor.TYPE_TILT_DETECTOR)
         val profile = collectProfile()
 
         fun motion(status: CapabilityStatus, reason: String) = status to reason
@@ -123,23 +121,15 @@ class DeviceCompatibilityEngine(private val context: Context) {
                 else -> "No accelerometer on this device"
             }))
         motionAdd(GestureType.PICKUP, motion(
-            when {
-                hasPickup -> CapabilityStatus.FULLY_SUPPORTED
-                hasAccel -> CapabilityStatus.SUPPORTED_WITH_LIMITATIONS
-                else -> CapabilityStatus.UNSUPPORTED
-            },
-            when {
-                hasPickup -> "Hardware pickup gesture sensor available"
-                hasAccel -> "No pickup sensor; heuristic (rise + tilt) used instead"
-                else -> "No accelerometer on this device"
-            }))
+            if (hasAccel) CapabilityStatus.REQUIRES_ALTERNATIVE else CapabilityStatus.UNSUPPORTED,
+            if (hasAccel) "No public pickup-sensor event is used by this build; a software rise-and-tilt heuristic is used."
+            else "No accelerometer on this device"))
         val tiltStatus = when {
-            hasTilt -> CapabilityStatus.FULLY_SUPPORTED
-            hasGravity || hasAccel -> CapabilityStatus.SUPPORTED_WITH_LIMITATIONS
+            hasGravity -> CapabilityStatus.FULLY_SUPPORTED
+            hasAccel -> CapabilityStatus.SUPPORTED_WITH_LIMITATIONS
             else -> CapabilityStatus.UNSUPPORTED
         }
         val tiltReason = when {
-            hasTilt -> "Tilt detector available"
             hasGravity -> "Gravity sensor used for tilt detection"
             hasAccel -> "Software gravity estimate used for tilt detection"
             else -> "No accelerometer on this device"
