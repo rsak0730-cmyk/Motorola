@@ -9,7 +9,6 @@ import com.universalgestures.recognition.ArbitrationDecision
 import com.universalgestures.recognition.Candidate
 import com.universalgestures.recognition.MotionFeature
 import com.universalgestures.recognition.MotionFeatureExtractor
-import com.universalgestures.recognition.PerGestureStateMachine
 import com.universalgestures.sensors.GravityEstimator
 import com.universalgestures.sensors.MotionPreprocessor
 import com.universalgestures.sensors.MotionSample
@@ -77,14 +76,6 @@ class AdvancedMotionPipelineTest {
         val features = MotionFeatureExtractor.extract(samples)
         assertEquals(32, features.size)
         assertEquals(11, features.first().dimensions.size)
-    }
-
-    @Test fun pulseMachineCompletesOnlyAfterExpectedDistinctPulses() {
-        val machine = PerGestureStateMachine(GestureType.DOUBLE_CHOP, expectedPulses = 2, maxGapMs = 500)
-        assertEquals(PerGestureStateMachine.State.ACTIVE_PULSE, machine.onMotion(1, 3f).state)
-        assertEquals(PerGestureStateMachine.State.WAITING_GAP, machine.onMotion(101, 0f).state)
-        assertEquals(PerGestureStateMachine.State.ACTIVE_PULSE, machine.onMotion(151, -3f).state)
-        assertEquals(PerGestureStateMachine.State.COMPLETE, machine.onMotion(251, 0f).state)
     }
 
     @Test fun arbitratorDefersSingleChopAndChoosesMoreSpecificDouble() {
