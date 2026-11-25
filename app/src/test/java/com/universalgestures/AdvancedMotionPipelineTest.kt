@@ -75,7 +75,7 @@ class AdvancedMotionPipelineTest {
             )
         }
         val features = MotionFeatureExtractor.extract(samples)
-        assertTrue(features.isNotEmpty())
+        assertEquals(32, features.size)
         assertEquals(11, features.first().dimensions.size)
     }
 

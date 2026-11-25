@@ -70,7 +70,10 @@ object MotionFeatureExtractor {
         val average = active.map { it.linearAccel.magnitude }.average().toFloat()
         val variance = active.map { (it.linearAccel.magnitude - average) * (it.linearAccel.magnitude - average) }.average().toFloat()
         val consistency = if (average < 0.01f) 0f else (1f - sqrt(variance) / average).coerceIn(0f, 1f)
-        val rotation = active.sumOf { it.gyro.magnitude.toDouble() * 0.02 }.toFloat()
+        val rotation = active.zipWithNext().sumOf { (a, b) ->
+            val seconds = ((b.timestampNanos - a.timestampNanos).coerceAtLeast(0L) / 1_000_000_000.0)
+            (a.gyro.magnitude.toDouble() + b.gyro.magnitude.toDouble()) * 0.5 * seconds
+        }.toFloat()
         return MotionFeatureSummary(
             segment.durationMs,
             if (active.size < 2) 0 else active.last().timestampMs - active.first().timestampMs,
@@ -96,21 +99,30 @@ object MotionFeatureExtractor {
     private fun monotonic(samples: List<SensorSample>) = samples.zipWithNext().all { (a, b) -> b.timestampNanos > a.timestampNanos }
 
     private fun resample(samples: List<SensorSample>, count: Int): List<SensorSample> {
-        if (samples.size <= count) return samples
+        if (samples.size < 2) return samples
+        val start = samples.first().timestampNanos
+        val duration = samples.last().timestampNanos - start
+        if (duration <= 0L) return emptyList()
         val result = ArrayList<SensorSample>(count)
+        var right = 1
         for (i in 0 until count) {
-            val position = i.toDouble() * (samples.size - 1) / (count - 1)
-            val left = position.toInt()
-            val right = minOf(left + 1, samples.lastIndex)
-            val ratio = (position - left).toFloat()
-            val a = samples[left]; val b = samples[right]
+            val target = start + (duration.toDouble() * i / (count - 1)).toLong()
+            while (right < samples.lastIndex && samples[right].timestampNanos < target) right++
+            val a = samples[(right - 1).coerceAtLeast(0)]
+            val b = samples[right]
+            val interval = (b.timestampNanos - a.timestampNanos).coerceAtLeast(1L)
+            val ratio = ((target - a.timestampNanos).toFloat() / interval.toFloat()).coerceIn(0f, 1f)
             fun mix(x: com.universalgestures.core.Vec3, y: com.universalgestures.core.Vec3) = x * (1f - ratio) + y * ratio
             result.add(a.copy(
-                timestampNanos = (a.timestampNanos + ((b.timestampNanos - a.timestampNanos) * ratio).toLong()),
+                timestampNanos = target,
+                accel = mix(a.accel, b.accel),
                 linearAccel = mix(a.linearAccel, b.linearAccel),
                 gyro = mix(a.gyro, b.gyro),
                 gravity = mix(a.gravity, b.gravity),
-                orientation = if (a.orientation != null && b.orientation != null) mix(a.orientation, b.orientation) else null
+                orientation = if (a.orientation != null && b.orientation != null) mix(a.orientation, b.orientation) else null,
+                proximityCm = a.proximityCm,
+                stepDetected = if (ratio < 0.5f) a.stepDetected else b.stepDetected,
+                quality = minOf(a.quality, b.quality)
             ))
         }
         return result
