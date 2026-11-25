@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Universal Gestures</string>
+    <string name="accessibility_service_label">Universal Gestures actions</string>
+    <string name="accessibility_service_description">Enables lock screen, screenshot and notification actions for Universal Gestures. Enabled only with your explicit consent.</string>
+</resources>

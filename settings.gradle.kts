@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "GestureFlow"
+rootProject.name = "UniversalGestures"
 include(":app")
