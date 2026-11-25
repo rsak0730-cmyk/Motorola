@@ -8,9 +8,6 @@ on:
 permissions:
   contents: read
 
-env:
-  ANDROID_HOME: /usr/local/lib/android/sdk
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -19,17 +16,16 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
           cache: gradle
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
+      # GitHub's ubuntu-latest image includes Android command-line tools and
+      # a preconfigured ANDROID_HOME; install only the SDK platform/build tools.
       - name: Install Android SDK packages
-        run: sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"
+        run: sdkmanager --install "platforms;android-34" "build-tools;34.0.0" "platform-tools"
 
       - name: Run unit tests
         run: ./gradlew --no-daemon testDebugUnitTest --stacktrace
