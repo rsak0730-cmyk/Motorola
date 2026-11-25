@@ -29,8 +29,8 @@ describes the logic, not a hardcoded device list.
 | Custom Motion | Fully supported | DTW templates recorded by user |
 | Proximity Wave | Fully supported | Near/far transitions only — cannot identify hand shapes |
 | Double Proximity Wave | Fully supported | |
-| Hand Motion | **Unsupported in this build** | Camera hardware may exist, but no camera-recognition pipeline is implemented |
-| Custom Air | **Unsupported in this build** | Proximity reports near/far only; no camera-recognition pipeline is implemented |
+| Hand Motion | Requires permission | Optional Studio foreground camera frame-motion activity detector; not hand-pose recognition |
+| Custom Air | **Unsupported** | No custom air-template recognizer; proximity reports near/far only |
 | Double Back Tap | **Unsupported** | Android exposes no back-tap events to third-party apps |
 | Triple Back Tap | **Unsupported** | Same |
 | Double Tap on Screen | **Unsupported** | Same |

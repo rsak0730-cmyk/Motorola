@@ -108,6 +108,8 @@ data class GestureConfig(
     val sensitivity: Int = 50,
     /** Inter-event window in ms used by multi-stage gestures. */
     val timingMs: Int = 900,
+    /** Minimum delay between accepted actions for this gesture. */
+    val cooldownMs: Int = 1200,
     val calibrated: Boolean = false
 )
 

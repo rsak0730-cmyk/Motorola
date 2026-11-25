@@ -211,8 +211,9 @@ class PickupRecognizer : GestureRecognizer {
         }
         // Heuristic: device was flat (gravity mostly -z) and now tilts up
         // with upward linear acceleration.
-        val wasFlat = baselineGravity.normalized().z < -0.8f
-        val nowTilted = sample.gravity.normalized().z > -0.5f
+        val wasFlat = abs(baselineGravity.normalized().z) > 0.8f
+        val current = sample.gravity.normalized()
+        val nowTilted = abs(current.z) < 0.72f || abs(current.y) > 0.68f
         val rising = sample.linearAccel.z > 1.5f || sample.linearAccel.magnitude > 2.5f
         if (wasFlat && nowTilted && rising) {
             if (riseStartMs < 0) riseStartMs = now
@@ -277,7 +278,8 @@ class TiltRecognizer(
 /** Proximity wave: near/far transitions (hand passing over the sensor). */
 class ProximityWaveRecognizer(
     private val gesture: GestureType,
-    private val requiredWaves: Int
+    private val requiredWaves: Int,
+    private val windowMs: Long = 2500L
 ) : GestureRecognizer {
 
     private var lastNear: Boolean? = null
@@ -295,7 +297,7 @@ class ProximityWaveRecognizer(
             if (now - lastTransitionMs >= 150L) {
                 lastTransitionMs = now
                 waveTimes.add(now)
-                while (waveTimes.isNotEmpty() && now - waveTimes.first() > 2500L) {
+                while (waveTimes.isNotEmpty() && now - waveTimes.first() > windowMs) {
                     waveTimes.removeAt(0)
                 }
                 if (waveTimes.size >= requiredWaves * 2) {

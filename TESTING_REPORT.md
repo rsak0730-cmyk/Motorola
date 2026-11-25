@@ -41,9 +41,10 @@ physical-device measurement.
   walking/running/vehicle negatives, screen on/off behaviour, battery
   drain, and manufacturer background restrictions must be done by hand
   using the in-app Gesture Studio (record → replay → compare).
-- **Camera hand-motion / custom air recognition** are not implemented in
-  this build. They are reported as unsupported rather than faked; the app
-  does not open the camera for these controls.
+- The optional camera feature is a foreground-only frame-motion activity
+  detector, not hand-pose recognition; custom air templates remain
+  unsupported. It needs camera permission and has not been physically
+  validated on a device.
 - **Screen/back-tap gestures** are unsupported by Android public APIs and
   are reported as such (see COMPATIBILITY_REPORT.md).
 - CI build status is the source of truth for compilation; check the

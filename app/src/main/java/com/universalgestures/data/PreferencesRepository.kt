@@ -33,6 +33,7 @@ class PreferencesRepository(private val context: Context) {
     private val keyProfile = stringPreferencesKey("recognition_profile")
     private val keySensitivity = intPreferencesKey("global_sensitivity")
     private val keyAccuracy = stringPreferencesKey("accuracy_mode")
+    private val keyCalibration = stringPreferencesKey("calibration_profiles_json")
 
     val monitoringEnabled: Flow<Boolean> = context.dataStore.data.map { it[keyMonitoring] ?: false }
     val vibrationFeedback: Flow<Boolean> = context.dataStore.data.map { it[keyVibration] ?: true }
@@ -74,6 +75,27 @@ class PreferencesRepository(private val context: Context) {
 
     suspend fun setRecognitionProfile(profile: RecognitionProfile) {
         context.dataStore.edit { it[keyProfile] = profile.name }
+    }
+
+    suspend fun calibrationJson(): String = context.dataStore.data.first()[keyCalibration] ?: "{}"
+
+    suspend fun saveCalibrationJson(json: String) {
+        context.dataStore.edit { it[keyCalibration] = json }
+    }
+
+    suspend fun addCalibrationExample(
+        gesture: GestureType,
+        positive: Boolean,
+        features: List<com.universalgestures.core.Vec3>
+    ): String {
+        var updated = "{}"
+        context.dataStore.edit { prefs ->
+            val store = com.universalgestures.recognition.CalibrationStore.fromJson(prefs[keyCalibration] ?: "{}")
+            if (positive) store.addPositive(gesture, features) else store.addNegative(gesture, features)
+            updated = store.toJson()
+            prefs[keyCalibration] = updated
+        }
+        return updated
     }
 
     /** Delete all stored configuration and calibration data. */
@@ -121,6 +143,7 @@ class PreferencesRepository(private val context: Context) {
                 obj.put("actionTarget", config.actionTarget)
                 obj.put("sensitivity", config.sensitivity)
                 obj.put("timingMs", config.timingMs)
+                obj.put("cooldownMs", config.cooldownMs)
                 obj.put("calibrated", config.calibrated)
                 array.put(obj)
             }
@@ -141,7 +164,8 @@ class PreferencesRepository(private val context: Context) {
                         action = action,
                         actionTarget = obj.optString("actionTarget", ""),
                         sensitivity = obj.optInt("sensitivity", 50),
-                        timingMs = obj.optInt("timingMs", 900),
+                        timingMs = obj.optInt("timingMs", 900).coerceIn(250, 5000),
+                        cooldownMs = obj.optInt("cooldownMs", 1200).coerceIn(250, 10000),
                         calibrated = obj.optBoolean("calibrated", false)
                     )
                 }

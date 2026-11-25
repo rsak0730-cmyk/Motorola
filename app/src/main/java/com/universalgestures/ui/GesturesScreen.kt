@@ -144,7 +144,13 @@ private fun GestureCard(
             Slider(
                 value = config.timingMs.toFloat(),
                 onValueChange = { onUpdateConfig(config.copy(timingMs = it.toInt())) },
-                valueRange = 300f..3000f
+                valueRange = 300f..5000f
+            )
+            Text("Cooldown: ${config.cooldownMs} ms")
+            Slider(
+                value = config.cooldownMs.toFloat(),
+                onValueChange = { onUpdateConfig(config.copy(cooldownMs = it.toInt())) },
+                valueRange = 250f..10000f
             )
             Text(
                 "Calibration: ${if (config.calibrated) "Personalised" else "Default profile"}",

@@ -66,7 +66,7 @@ class ImuProcessor {
             filteredAccel = accel
             filteredGyro = gyro
             lastTimestampNanos = timestampNanos
-            return ProcessedImu(filteredAccel, filteredGyro, accel - gravityEstimate, true)
+            return ProcessedImu(filteredAccel, filteredGyro, accel - gravityEstimate, gravityEstimate, true)
         }
         if (dtNanos > 0) {
             val hz = 1e9f / dtNanos.toFloat()
@@ -103,7 +103,7 @@ class ImuProcessor {
         val correctedGyro = filteredGyro - gyroBias
 
         val linearAccel = hardwareLinearAccel ?: (filteredAccel - gravityEstimate)
-        return ProcessedImu(filteredAccel, correctedGyro, linearAccel, false)
+        return ProcessedImu(filteredAccel, correctedGyro, linearAccel, gravityEstimate, false)
     }
 
     /** Complementary-filter orientation (roll/pitch) from gravity + gyro integration. */
@@ -122,6 +122,7 @@ data class ProcessedImu(
     val accel: Vec3,
     val gyro: Vec3,
     val linearAccel: Vec3,
+    val gravity: Vec3,
     val wasReset: Boolean
 )
 

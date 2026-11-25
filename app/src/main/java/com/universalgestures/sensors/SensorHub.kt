@@ -66,7 +66,9 @@ class SensorHub(context: Context) : SensorEventListener {
     fun hasSensor(type: Int): Boolean =
         sensorManager.getDefaultSensor(type) != null
 
-    fun start(listener: (SensorSample) -> Unit) {
+    fun start(listener: (SensorSample) -> Unit, samplingPeriodUs: Int = 20_000) {
+        stop()
+        imu.reset()
         this.listener = listener
         accel = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
         gyro = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
@@ -76,7 +78,7 @@ class SensorHub(context: Context) : SensorEventListener {
         proximity = sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY)
         stepDetector = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)
 
-        val rate = SensorManager.SENSOR_DELAY_GAME
+        val rate = samplingPeriodUs.coerceIn(10_000, 100_000)
         accel?.let { sensorManager.registerListener(this, it, rate) }
         gyro?.let { sensorManager.registerListener(this, it, rate) }
         gravitySensor?.let { sensorManager.registerListener(this, it, rate) }
@@ -107,7 +109,12 @@ class SensorHub(context: Context) : SensorEventListener {
             Sensor.TYPE_STEP_DETECTOR -> lastStepNanos = event.timestamp
             else -> return
         }
-        emit(event.timestamp)
+        // Use accelerometer timestamps as the IMU clock. Proximity is also
+        // emitted so proximity-only interaction remains observable without
+        // advancing the inertial filter on unrelated sensor callbacks.
+        if (event.sensor.type == Sensor.TYPE_ACCELEROMETER || event.sensor.type == Sensor.TYPE_PROXIMITY) {
+            emit(event.timestamp)
+        }
     }
 
     private fun emit(timestampNanos: Long) {
@@ -118,7 +125,7 @@ class SensorHub(context: Context) : SensorEventListener {
                 timestampNanos = timestampNanos,
                 accel = processed.accel,
                 gyro = processed.gyro,
-                gravity = lastGravity ?: lastAccel,
+                gravity = lastGravity ?: processed.gravity,
                 linearAccel = processed.linearAccel,
                 rotationVector = lastRotation,
                 proximityCm = lastProximity,

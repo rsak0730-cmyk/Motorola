@@ -41,9 +41,9 @@ Recognition works fully without machine learning. No TFLite dependency.
 
 Motion: Double Chop, Single Chop, Double Twist, Triple Twist, Shake,
 Double/Triple Shake, Flip, Pickup, Tilt (×4), Custom Motion (DTW templates).
-Proximity: Wave, Double Wave. Camera-based Hand Motion and Custom Air are
-explicitly reported as unsupported in this build; no camera pipeline is
-present, and the app never opens the camera in the background.
+Proximity: Wave, Double Wave. The optional foreground camera detector reports
+frame-motion activity (not hand pose or identity) with explicit permission.
+Custom Air templates remain unsupported.
 
 Screen/back-tap gestures (double/triple back tap, double-tap screen,
 three-finger swipe/screenshot) are reported as **unsupported** by the
@@ -60,8 +60,10 @@ DND (notification policy access), ringer mode (policy access where required).
 ## Privacy
 
 All processing is local. No account, no cloud, no sensor-data uploads, no
-hidden camera/mic. Camera gestures run only in the foreground when you
-activate them. You can delete all local data in Settings.
+hidden camera/mic. The optional Studio camera uses a foreground Camera2
+preview and in-memory frame-difference motion detector only while enabled;
+it does not identify hand pose or save frames. Camera permission is requested
+only from that Studio control. You can delete all local data in Settings.
 
 ## Build
 

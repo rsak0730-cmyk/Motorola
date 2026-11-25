@@ -18,6 +18,7 @@ import androidx.core.app.NotificationCompat
 import com.universalgestures.actions.ActionExecutor
 import com.universalgestures.core.GestureConfig
 import com.universalgestures.core.GestureType
+import com.universalgestures.core.RecognitionProfile
 import com.universalgestures.data.DiagnosticsStore
 import com.universalgestures.data.PreferencesRepository
 import com.universalgestures.recognition.RecognitionPipeline
@@ -48,6 +49,9 @@ class GestureForegroundService : Service() {
     private var configs: Map<GestureType, GestureConfig> = emptyMap()
     private var vibrateOnTrigger = true
     private var soundOnTrigger = false
+    private var profile = RecognitionProfile.DEFAULT
+    private var globalSensitivity = 50
+    private var accuracyMode = "BALANCED"
     private var toneGenerator: ToneGenerator? = null
     private var screenOn = true
 
@@ -56,12 +60,11 @@ class GestureForegroundService : Service() {
             when (intent?.action) {
                 Intent.ACTION_SCREEN_OFF -> {
                     screenOn = false
-                    // Pause high-rate sampling while the screen is off to
-                    // save battery; wake-up sensors remain registered by
-                    // the system where available.
+                    restartSensorsForDisplayState()
                 }
                 Intent.ACTION_SCREEN_ON -> {
                     screenOn = true
+                    restartSensorsForDisplayState()
                 }
             }
         }
@@ -77,32 +80,47 @@ class GestureForegroundService : Service() {
         registerReceiver(screenReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF).apply {
             addAction(Intent.ACTION_SCREEN_ON)
         })
-        scope.launch {
-            configs = prefs.gestureConfigs()
-            vibrateOnTrigger = prefs.vibrationFeedback.first()
-            soundOnTrigger = prefs.soundFeedback.first()
-            pipeline = RecognitionPipeline(configs)
-            sensorHub.start { sample ->
-                if (!screenOn) return@start
-                val result = pipeline.onSample(sample)
-                val event = result.event
-                if (event != null) {
-                    DiagnosticsHolder.store.recordEvent(event)
-                    val config = configs[event.type]
-                    if (config != null && config.action.name != "NONE") {
-                        val actionResult = executor.execute(config.action, config.actionTarget)
-                        DiagnosticsHolder.lastActionMessage = actionResult.message
-                    }
-                    if (vibrateOnTrigger) vibrate()
-                    if (soundOnTrigger) toneGenerator?.startTone(ToneGenerator.TONE_PROP_ACK, 100)
-                }
-            }
-        }
+        scope.launch { refreshEngine() }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForeground(NOTIFICATION_ID, buildNotification())
+        if (intent?.action == ACTION_REFRESH_ENGINE) scope.launch { refreshEngine() }
         return START_STICKY
+    }
+
+    private suspend fun refreshEngine() {
+        configs = prefs.gestureConfigs()
+        vibrateOnTrigger = prefs.vibrationFeedback.first()
+        soundOnTrigger = prefs.soundFeedback.first()
+        profile = prefs.recognitionProfile.first()
+        globalSensitivity = prefs.globalSensitivity.first()
+        accuracyMode = prefs.accuracyMode.first()
+        val calibration = com.universalgestures.recognition.CalibrationStore.fromJson(prefs.calibrationJson())
+        pipeline = RecognitionPipeline(configs, calibration, profile = profile,
+            globalSensitivity = globalSensitivity, accuracyMode = accuracyMode)
+        startSensors()
+    }
+
+    private fun startSensors() {
+        sensorHub.start(::processSample, samplingPeriodUs = if (screenOn) 20_000 else 50_000)
+    }
+
+    private fun restartSensorsForDisplayState() {
+        if (::pipeline.isInitialized) startSensors()
+    }
+
+    private fun processSample(sample: com.universalgestures.core.SensorSample) {
+        val result = pipeline.onSample(sample)
+        val event = result.event ?: return
+        DiagnosticsHolder.store.recordEvent(event)
+        val config = configs[event.type]
+        if (config != null && config.action.name != "NONE") {
+            val actionResult = executor.execute(config.action, config.actionTarget)
+            DiagnosticsHolder.lastActionMessage = actionResult.message
+        }
+        if (vibrateOnTrigger) vibrate()
+        if (soundOnTrigger) toneGenerator?.startTone(ToneGenerator.TONE_PROP_ACK, 100)
     }
 
     override fun onDestroy() {
@@ -154,6 +172,7 @@ class GestureForegroundService : Service() {
     }
 
     companion object {
+        const val ACTION_REFRESH_ENGINE = "com.universalgestures.action.REFRESH_ENGINE"
         private const val NOTIFICATION_ID = 1001
 
         fun start(context: Context) {

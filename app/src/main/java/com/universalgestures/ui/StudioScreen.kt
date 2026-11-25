@@ -1,6 +1,8 @@
 package com.universalgestures.ui
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,6 +21,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -28,11 +32,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.universalgestures.core.GestureConfig
 import com.universalgestures.core.GestureType
 import com.universalgestures.core.RecognitionProfile
 import com.universalgestures.core.SensorSample
+import com.universalgestures.core.Vec3
 import com.universalgestures.recognition.CalibrationStore
+import com.universalgestures.recognition.RecognitionPipeline
 import com.universalgestures.recognition.DtwMatcher
 import com.universalgestures.sensors.SensorHub
 import kotlin.math.sqrt
@@ -43,7 +50,8 @@ import kotlin.math.sqrt
 fun StudioScreen(
     state: UiState,
     onUpdateConfig: (GestureConfig) -> Unit,
-    onSetProfile: (RecognitionProfile) -> Unit
+    onSetProfile: (RecognitionProfile) -> Unit,
+    onAddCalibrationExample: (GestureType, Boolean, List<Vec3>) -> Unit
 ) {
     val context = LocalContext.current
     var recording by remember { mutableStateOf(false) }
@@ -51,7 +59,17 @@ fun StudioScreen(
     var selectedGesture by remember { mutableStateOf(GestureType.DOUBLE_CHOP) }
     var expanded by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf("") }
-    val calibration = remember { CalibrationStore() }
+    var cameraActive by remember { mutableStateOf(false) }
+    var cameraGranted by remember {
+        mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
+    }
+    var cameraMessage by remember { mutableStateOf("Camera analysis is off.") }
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        cameraGranted = granted
+        cameraActive = granted
+        cameraMessage = if (granted) "Camera analysis enabled while this screen is visible." else "Camera permission denied; camera analysis remains off."
+    }
+    val calibration = remember(state.calibrationJson) { CalibrationStore.fromJson(state.calibrationJson) }
     val samples = remember { mutableListOf<SensorSample>() }
     val replay = remember { mutableListOf<SensorSample>() }
     val hub = remember { mutableStateOf<SensorHub?>(null) }
@@ -117,9 +135,52 @@ fun StudioScreen(
                         replay.clear()
                         replay.addAll(samples)
                         liveText = if (replay.isEmpty()) "No samples to replay. Record a motion first." else
-                            "Replay loaded: ${replay.size} samples. Record a second attempt, then Compare."
-                    }) { Text("Load replay") }
+                            "Replay saved in this session: ${replay.size} samples. Record another attempt, then Compare."
+                    }) { Text("Save replay") }
+                    OutlinedButton(onClick = {
+                        val replayPipeline = RecognitionPipeline(
+                            configs = state.configs,
+                            calibration = CalibrationStore.fromJson(state.calibrationJson),
+                            profile = state.recognitionProfile,
+                            globalSensitivity = state.globalSensitivity,
+                            accuracyMode = state.accuracyMode
+                        )
+                        var accepted = 0
+                        var lastReason = "none"
+                        replay.forEach { sample ->
+                            val result = replayPipeline.onSample(sample)
+                            if (result.event != null) accepted++
+                            if (result.rejectionReason != com.universalgestures.core.RejectionReason.NONE) lastReason = result.rejectionReason.name
+                        }
+                        liveText = "Replay: ${replay.size} samples · accepted events=$accepted · final rejection=$lastReason"
+                    }) { Text("Run replay") }
                     OutlinedButton(onClick = { liveText = compareSamples(samples, replay) }) { Text("Compare") }
+                }
+            }
+        }
+
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Optional foreground hand-motion", style = MaterialTheme.typography.titleMedium)
+                Text(cameraMessage, style = MaterialTheme.typography.bodySmall)
+                Text("Only frame-to-frame movement is detected. No frames are saved. This is not hand pose recognition.", style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = {
+                        if (!cameraGranted) cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                        else cameraActive = !cameraActive
+                    }) { Text(if (cameraActive) "Stop camera" else if (cameraGranted) "Start camera" else "Grant camera permission") }
+                }
+                if (cameraActive && cameraGranted) {
+                    ForegroundHandMotionPreview { message ->
+                        cameraMessage = message
+                        if (message.startsWith("Motion detected") && state.configs[GestureType.HAND_MOTION]?.enabled == true) {
+                            val config = state.configs[GestureType.HAND_MOTION]
+                            if (config != null && config.action != com.universalgestures.core.ActionType.NONE) {
+                                val result = com.universalgestures.actions.ActionExecutor(context).execute(config.action, config.actionTarget)
+                                cameraMessage = "$message Action: ${result.message}"
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -145,7 +206,7 @@ fun StudioScreen(
                     }
                 }
                 Text(
-                    "Record a gesture attempt, then add it as a positive sample. Record ordinary handling separately as a negative sample. Calibration samples are session-local and are not currently persisted across app restarts.",
+                    "Record a gesture attempt, then add it as a positive sample. Record ordinary handling separately as a negative sample. Calibration samples are stored locally in DataStore and remain on this device.",
                     style = MaterialTheme.typography.bodySmall
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -154,7 +215,8 @@ fun StudioScreen(
                         if (features.isEmpty()) note = "Record sensor data before adding an example."
                         else {
                             calibration.addPositive(selectedGesture, features)
-                            note = "Positive example recorded (${calibration.profileFor(selectedGesture).positives.size})."
+                            onAddCalibrationExample(selectedGesture, true, features)
+                            note = "Positive example saved locally (${calibration.profileFor(selectedGesture).positives.size})."
                         }
                     }) { Text("Add positive") }
                     OutlinedButton(onClick = {
@@ -162,7 +224,8 @@ fun StudioScreen(
                         if (features.isEmpty()) note = "Record sensor data before adding an example."
                         else {
                             calibration.addNegative(selectedGesture, features)
-                            note = "Negative example recorded (${calibration.profileFor(selectedGesture).negatives.size})."
+                            onAddCalibrationExample(selectedGesture, false, features)
+                            note = "Negative example saved locally (${calibration.profileFor(selectedGesture).negatives.size})."
                         }
                     }) { Text("Add negative") }
                 }
@@ -175,7 +238,7 @@ fun StudioScreen(
                         note = "Add at least one positive sample before saving calibration."
                     } else {
                         onUpdateConfig(config.copy(calibrated = profile.calibrated))
-                        note = if (profile.calibrated) "Calibration profile applied to gesture configuration. Session examples are not persisted." else
+                        note = if (profile.calibrated) "Persistent calibration saved and applied to the live recognizer." else
                             "Baseline status saved; add at least two positive examples for a calibrated profile."
                     }
                 }) { Text("Apply calibration status") }

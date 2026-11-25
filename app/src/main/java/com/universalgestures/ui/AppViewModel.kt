@@ -1,6 +1,7 @@
 package com.universalgestures.ui
 
 import android.app.Application
+import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.universalgestures.core.ActionType
@@ -10,6 +11,8 @@ import com.universalgestures.core.GestureConfig
 import com.universalgestures.core.GestureEvent
 import com.universalgestures.core.GestureType
 import com.universalgestures.core.RecognitionProfile
+import com.universalgestures.core.Vec3
+import com.universalgestures.recognition.CalibrationStore
 import com.universalgestures.data.PreferencesRepository
 import com.universalgestures.device.DeviceCompatibilityEngine
 import com.universalgestures.service.DiagnosticsHolder
@@ -28,6 +31,7 @@ data class UiState(
     val globalSensitivity: Int = 50,
     val accuracyMode: String = "BALANCED",
     val recognitionProfile: RecognitionProfile = RecognitionProfile.DEFAULT,
+    val calibrationJson: String = "{}",
     val recentEvents: List<GestureEvent> = emptyList(),
     val statusMessage: String = ""
 )
@@ -67,6 +71,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun refresh() {
         viewModelScope.launch {
             val configs = prefs.gestureConfigs()
+            val calibrationJson = prefs.calibrationJson()
             val capabilities = deviceEngine.evaluateGestures()
             val profile = deviceEngine.collectProfile()
             val events = try {
@@ -76,6 +81,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
             _state.value = _state.value.copy(
                 configs = configs,
+                calibrationJson = calibrationJson,
                 capabilities = capabilities,
                 deviceProfile = profile,
                 recentEvents = events
@@ -89,6 +95,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             current[updated.type] = updated
             prefs.saveGestureConfigs(current)
             _state.value = _state.value.copy(configs = current)
+            refreshRunningService()
         }
     }
 
@@ -100,23 +107,45 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setVibrationFeedback(enabled: Boolean) {
-        viewModelScope.launch { prefs.setVibrationFeedback(enabled) }
+        viewModelScope.launch { prefs.setVibrationFeedback(enabled); refreshRunningService() }
     }
 
     fun setSoundFeedback(enabled: Boolean) {
-        viewModelScope.launch { prefs.setSoundFeedback(enabled) }
+        viewModelScope.launch { prefs.setSoundFeedback(enabled); refreshRunningService() }
     }
 
     fun setGlobalSensitivity(value: Int) {
-        viewModelScope.launch { prefs.setGlobalSensitivity(value) }
+        viewModelScope.launch { prefs.setGlobalSensitivity(value); refreshRunningService() }
     }
 
     fun setAccuracyMode(mode: String) {
-        viewModelScope.launch { prefs.setAccuracyMode(mode) }
+        viewModelScope.launch { prefs.setAccuracyMode(mode); refreshRunningService() }
     }
 
     fun setRecognitionProfile(profile: RecognitionProfile) {
-        viewModelScope.launch { prefs.setRecognitionProfile(profile) }
+        viewModelScope.launch { prefs.setRecognitionProfile(profile); refreshRunningService() }
+    }
+
+    private fun refreshRunningService() {
+        if (!_state.value.monitoringEnabled) return
+        try {
+            val intent = Intent(getApplication(), com.universalgestures.service.GestureForegroundService::class.java)
+                .setAction(com.universalgestures.service.GestureForegroundService.ACTION_REFRESH_ENGINE)
+            getApplication<Application>().startService(intent)
+        } catch (_: Exception) {
+            // System may have stopped the service; the Home control can start it again.
+        }
+    }
+
+    fun addCalibrationExample(type: GestureType, positive: Boolean, features: List<Vec3>) {
+        if (features.isEmpty()) return
+        viewModelScope.launch {
+            val json = prefs.addCalibrationExample(type, positive, features)
+            val store = CalibrationStore.fromJson(json)
+            val updated = _state.value.configs[type]?.copy(calibrated = store.isCalibrated(type))
+            if (updated != null) updateConfig(updated)
+            _state.value = _state.value.copy(calibrationJson = store.toJson())
+        }
     }
 
     fun setAction(type: GestureType, action: ActionType, target: String = "") {
@@ -142,6 +171,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearAllData() {
         viewModelScope.launch {
+            try { getApplication<Application>().stopService(Intent(getApplication(), com.universalgestures.service.GestureForegroundService::class.java)) } catch (_: Exception) { }
             prefs.clearAll()
             try {
                 DiagnosticsHolder.store.clear()
@@ -149,7 +179,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 // Store may not be initialised yet.
             }
             refresh()
-            _state.value = _state.value.copy(statusMessage = "All local data deleted")
+            _state.value = _state.value.copy(monitoringEnabled = false, statusMessage = "All local configuration, calibration and diagnostics deleted; monitoring stopped")
         }
     }
 

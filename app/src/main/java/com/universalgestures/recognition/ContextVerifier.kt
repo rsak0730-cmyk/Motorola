@@ -2,6 +2,7 @@ package com.universalgestures.recognition
 
 import com.universalgestures.core.GestureType
 import com.universalgestures.core.SensorSample
+import kotlin.math.sqrt
 
 /**
  * CMVE — Contextual Motion Verification Engine.
@@ -12,13 +13,17 @@ import com.universalgestures.core.SensorSample
  */
 class ContextVerifier {
 
-    private var stepTimes = mutableListOf<Long>()
-    private var recentEnergy = mutableListOf<Pair<Long, Float>>()
+    private val stepTimes = mutableListOf<Long>()
+    private val recentEnergy = mutableListOf<Pair<Long, Float>>()
+    private var lastStepRecordedMs = Long.MIN_VALUE
 
     fun onSample(sample: SensorSample) {
         val now = sample.timestampMs
-        if (sample.stepDetected) {
+        // SensorHub exposes a short-lived step pulse alongside other sensor
+        // callbacks; deduplicate that pulse to one count per physical step.
+        if (sample.stepDetected && now - lastStepRecordedMs >= 300L) {
             stepTimes.add(now)
+            lastStepRecordedMs = now
         }
         while (stepTimes.isNotEmpty() && now - stepTimes.first() > 4000L) {
             stepTimes.removeAt(0)
@@ -43,9 +48,14 @@ class ContextVerifier {
 
     /** Sustained periodic energy typical of vehicle / walking vibration. */
     fun hasSustainedPeriodicEnergy(): Boolean {
-        if (recentEnergy.size < 20) return false
-        val avg = recentEnergy.map { it.second }.average()
-        return avg > 1.8
+        if (recentEnergy.size < 40) return false
+        val values = recentEnergy.map { it.second }
+        val avg = values.average()
+        if (avg < 1.8) return false
+        val variance = values.map { (it - avg) * (it - avg) }.average()
+        // Steady sustained vibration is more consistent with vehicle or
+        // continuous locomotion than a short, intentional gesture burst.
+        return sqrt(variance) / avg.coerceAtLeast(0.1) < 0.42
     }
 
     /**
@@ -62,13 +72,13 @@ class ContextVerifier {
         // Walking / running: require stronger evidence for chop/shake/twist
         // by rejecting low-confidence candidates outright.
         val spm = stepsPerMinute(nowMs)
-        if (spm > 60f && gesture in setOf(
-                GestureType.SINGLE_CHOP, GestureType.DOUBLE_CHOP,
-                GestureType.SHAKE, GestureType.DOUBLE_SHAKE, GestureType.TRIPLE_SHAKE
-            )
-        ) {
-            return false
-        }
+        val rhythmicSensitiveGestures = setOf(
+            GestureType.SINGLE_CHOP, GestureType.DOUBLE_CHOP,
+            GestureType.SHAKE, GestureType.DOUBLE_SHAKE, GestureType.TRIPLE_SHAKE,
+            GestureType.DOUBLE_TWIST, GestureType.TRIPLE_TWIST
+        )
+        if (spm > 60f && gesture in rhythmicSensitiveGestures) return false
+        if (gesture in rhythmicSensitiveGestures && hasSustainedPeriodicEnergy()) return false
         return true
     }
 

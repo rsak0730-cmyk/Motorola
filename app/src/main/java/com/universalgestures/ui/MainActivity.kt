@@ -160,7 +160,8 @@ private fun AppShell(
                 Tab.STUDIO -> StudioScreen(
                     state = state,
                     onUpdateConfig = viewModel::updateConfig,
-                    onSetProfile = viewModel::setRecognitionProfile
+                    onSetProfile = viewModel::setRecognitionProfile,
+                    onAddCalibrationExample = viewModel::addCalibrationExample
                 )
                 Tab.AUTOMATION -> AutomationScreen(
                     state = state,

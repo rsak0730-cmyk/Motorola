@@ -27,7 +27,8 @@ class PrecisionGate(
         contextAllows: Boolean,
         segmentComplete: Boolean,
         sensorQualityOk: Boolean,
-        actionEligible: Boolean
+        actionEligible: Boolean,
+        cooldownFor: (GestureType) -> Long = { duplicateCooldownMs }
     ): RecognitionResult {
         if (!sensorQualityOk) {
             return RecognitionResult(rejectionReason = RejectionReason.SENSOR_QUALITY_LOW, detail = "sensor quality insufficient")
@@ -54,7 +55,7 @@ class PrecisionGate(
         }
         val now = sample.timestampMs
         val last = lastAccepted[best.type] ?: -1L
-        if (last >= 0 && now - last < duplicateCooldownMs) {
+        if (last >= 0 && now - last < cooldownFor(best.type).coerceAtLeast(250L)) {
             return RecognitionResult(rejectionReason = RejectionReason.DUPLICATE, detail = "duplicate suppressed")
         }
         if (lastAnyAcceptedMs >= 0 && now - lastAnyAcceptedMs < 400L) {

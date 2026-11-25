@@ -161,13 +161,13 @@ class DeviceCompatibilityEngine(private val context: Context) {
             if (hasProximity) CapabilityStatus.FULLY_SUPPORTED else CapabilityStatus.UNSUPPORTED,
             if (hasProximity) "Double wave counted from proximity transitions" else "No proximity sensor on this device"))
 
-        // Do not advertise camera-based recognition until a complete,
-        // foreground-only camera pipeline is implemented and validated.
-        add(GestureType.HAND_MOTION, CapabilityStatus.UNSUPPORTED,
-            if (profile.hasCamera) "Camera hardware exists, but foreground hand-motion recognition is not implemented in this build."
+        // Camera movement detector is a foreground-only optional feature.
+        add(GestureType.HAND_MOTION,
+            if (profile.hasCamera) CapabilityStatus.REQUIRES_PERMISSION else CapabilityStatus.UNSUPPORTED,
+            if (profile.hasCamera) "Optional foreground camera motion activity detector; needs explicit camera permission. Detects frame movement, not hand pose or identity."
             else "No camera on this device.")
         add(GestureType.CUSTOM_AIR, CapabilityStatus.UNSUPPORTED,
-            "Custom air-motion recognition is not implemented in this build; proximity reports only near/far transitions.")
+            "Custom air-motion templates are not implemented; proximity reports only near/far transitions and the camera detector only reports motion activity.")
 
         return results
     }
