@@ -2,12 +2,12 @@ package com.universalgestures.recognition
 
 import com.universalgestures.core.GestureConfig
 import com.universalgestures.core.GestureType
+import com.universalgestures.core.MotionSegment
 import com.universalgestures.core.RecognitionProfile
 import com.universalgestures.core.RecognitionResult
 import com.universalgestures.core.RejectionReason
 import com.universalgestures.core.SensorSample
 import com.universalgestures.core.Vec3
-import com.universalgestures.sensors.MotionSegment
 import com.universalgestures.sensors.MotionSegmenter
 
 /** Timestamped, complete-sequence UMI pipeline with negative classification and centralized arbitration. */
@@ -131,7 +131,7 @@ class RecognitionPipeline(
             }
             is ArbitrationDecision.Ambiguous -> {
                 deferredSegment = null
-                RecognitionResult(RejectionReason.AMBIGUOUS, detail = decision.reason)
+                RecognitionResult(rejectionReason = RejectionReason.AMBIGUOUS, detail = decision.reason)
             }
             is ArbitrationDecision.Winner -> {
                 val segment = candidateSegment ?: deferredSegment
@@ -150,17 +150,17 @@ class RecognitionPipeline(
     ): RecognitionResult {
         val type = candidate.type
         if (configs[type]?.enabled != true || configs[type]?.action?.name == "NONE") {
-            return RecognitionResult(RejectionReason.ACTION_INELIGIBLE, detail = "gesture disabled or action not assigned")
+            return RecognitionResult(rejectionReason = RejectionReason.ACTION_INELIGIBLE, detail = "gesture disabled or action not assigned")
         }
         val negative = segment?.let {
             negativeClassifier.classify(it, it.samples, context.stepsPerMinute(sample.timestampMs), type)
         }
         if (negative?.rejected == true) {
             val reason = if (negative.kind == NegativeMotionKind.TABLE_IMPACT) RejectionReason.PATTERN_MISMATCH else RejectionReason.CONTEXT_REJECTED
-            return RecognitionResult(reason, detail = "negative classifier: ${negative.reason}")
+            return RecognitionResult(rejectionReason = reason, detail = "negative classifier: ${negative.reason}")
         }
         if (!context.allows(type, sample, sample.timestampMs)) {
-            return RecognitionResult(RejectionReason.CONTEXT_REJECTED, detail = "CMVE rejected ${type.name}")
+            return RecognitionResult(rejectionReason = RejectionReason.CONTEXT_REJECTED, detail = "CMVE rejected ${type.name}")
         }
         val sequenceFeatures = segment?.takeIf { it.complete }?.let { MotionFeatureExtractor.extract(it.samples) }.orEmpty()
         val calibrated = if (sequenceFeatures.isNotEmpty() && templates.positives(type).isNotEmpty()) {
@@ -171,7 +171,7 @@ class RecognitionPipeline(
         }
         val confidence = calibrated * context.confidenceMultiplier(type, sample.timestampMs)
         if (confidence < gate.minimumConfidence) {
-            return RecognitionResult(RejectionReason.LOW_CONFIDENCE, detail = "candidate confidence after calibration/context=${"%.3f".format(confidence)}")
+            return RecognitionResult(rejectionReason = RejectionReason.LOW_CONFIDENCE, detail = "candidate confidence after calibration/context=${"%.3f".format(confidence)}")
         }
         val qualityOk = sample.accel.magnitude > 0.1f || sample.gyro.magnitude > 0.01f || sample.proximityCm != null
         return gate.evaluate(
