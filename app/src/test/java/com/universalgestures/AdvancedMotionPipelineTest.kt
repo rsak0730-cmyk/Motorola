@@ -39,6 +39,21 @@ class AdvancedMotionPipelineTest {
         assertNotNull(next?.orientation)
     }
 
+    @Test fun staleGyroscopeIsDownweightedInsteadOfBeingTreatedAsSynchronized() {
+        val processor = MotionPreprocessor()
+        val frame = processor.process(
+            MotionSample(
+                timestampNanos = 1_000_000_000L,
+                accelerometer = Vec3(0f, 0f, 9.81f),
+                gyroscope = Vec3(0f, 4f, 0f),
+                gyroscopeTimestampNanos = 500_000_000L
+            )
+        )
+        assertNotNull(frame)
+        assertEquals(0f, frame?.angularVelocity?.magnitude ?: -1f, 0.0001f)
+        assertTrue((frame?.quality ?: 1f) < 0.5f)
+    }
+
     @Test fun multivariateDtwSeparatesDifferentMotionAndAcceptsIdenticalSequence() {
         val a = (0 until 12).map { i -> feature(if (i < 6) 0.2f else -0.2f, 0.1f) }
         val same = a.map { MotionFeature(it.dimensions.toList()) }

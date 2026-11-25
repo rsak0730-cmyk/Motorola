@@ -38,10 +38,15 @@ class SensorHub(context: Context) : SensorEventListener {
     private var stepDetector: Sensor? = null
 
     private var lastAccel = Vec3()
+    private var lastAccelNanos = 0L
     private var lastGyro = Vec3()
+    private var lastGyroNanos = 0L
     private var lastGravity: Vec3? = null
+    private var lastGravityNanos = 0L
     private var lastLinearAccel: Vec3? = null
+    private var lastLinearAccelNanos = 0L
     private var lastRotation: Vec3? = null
+    private var lastRotationNanos = 0L
     private var lastProximity: Float? = null
     private var lastStepNanos = 0L
     private var registered = false
@@ -76,6 +81,12 @@ class SensorHub(context: Context) : SensorEventListener {
     ) {
         stop()
         preprocessor.reset()
+        lastAccel = Vec3(); lastAccelNanos = 0L
+        lastGyro = Vec3(); lastGyroNanos = 0L
+        lastGravity = null; lastGravityNanos = 0L
+        lastLinearAccel = null; lastLinearAccelNanos = 0L
+        lastRotation = null; lastRotationNanos = 0L
+        lastProximity = null; lastStepNanos = 0L
         this.listener = listener
         accel = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
         gyro = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
@@ -107,11 +118,11 @@ class SensorHub(context: Context) : SensorEventListener {
     override fun onSensorChanged(event: SensorEvent) {
         val values = event.values
         when (event.sensor.type) {
-            Sensor.TYPE_ACCELEROMETER -> lastAccel = Vec3(values[0], values[1], values[2])
-            Sensor.TYPE_GYROSCOPE -> lastGyro = Vec3(values[0], values[1], values[2])
-            Sensor.TYPE_GRAVITY -> lastGravity = Vec3(values[0], values[1], values[2])
-            Sensor.TYPE_LINEAR_ACCELERATION -> lastLinearAccel = Vec3(values[0], values[1], values[2])
-            Sensor.TYPE_ROTATION_VECTOR -> lastRotation = Vec3(values[0], values[1], values[2])
+            Sensor.TYPE_ACCELEROMETER -> { lastAccel = Vec3(values[0], values[1], values[2]); lastAccelNanos = event.timestamp }
+            Sensor.TYPE_GYROSCOPE -> { lastGyro = Vec3(values[0], values[1], values[2]); lastGyroNanos = event.timestamp }
+            Sensor.TYPE_GRAVITY -> { lastGravity = Vec3(values[0], values[1], values[2]); lastGravityNanos = event.timestamp }
+            Sensor.TYPE_LINEAR_ACCELERATION -> { lastLinearAccel = Vec3(values[0], values[1], values[2]); lastLinearAccelNanos = event.timestamp }
+            Sensor.TYPE_ROTATION_VECTOR -> { lastRotation = Vec3(values[0], values[1], values[2]); lastRotationNanos = event.timestamp }
             Sensor.TYPE_PROXIMITY -> lastProximity = values[0]
             Sensor.TYPE_STEP_DETECTOR -> lastStepNanos = event.timestamp
             else -> return
@@ -131,9 +142,14 @@ class SensorHub(context: Context) : SensorEventListener {
                 timestampNanos = timestampNanos,
                 accelerometer = lastAccel,
                 gyroscope = lastGyro,
+                accelerometerTimestampNanos = lastAccelNanos.takeIf { it > 0L },
+                gyroscopeTimestampNanos = if (gyro != null) lastGyroNanos else null,
                 gravitySensor = lastGravity,
+                gravityTimestampNanos = lastGravityNanos.takeIf { it > 0L },
                 linearAccelerationSensor = lastLinearAccel,
+                linearAccelerationTimestampNanos = lastLinearAccelNanos.takeIf { it > 0L },
                 rotationVector = lastRotation,
+                rotationVectorTimestampNanos = lastRotationNanos.takeIf { it > 0L },
                 proximityCm = lastProximity,
                 stepDetected = lastStepNanos != 0L && timestampNanos - lastStepNanos < 100_000_000L
             )

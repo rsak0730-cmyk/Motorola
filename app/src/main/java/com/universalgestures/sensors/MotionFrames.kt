@@ -9,9 +9,14 @@ data class MotionSample(
     val timestampNanos: Long,
     val accelerometer: Vec3,
     val gyroscope: Vec3,
+    val accelerometerTimestampNanos: Long? = timestampNanos,
+    val gyroscopeTimestampNanos: Long? = null,
     val gravitySensor: Vec3? = null,
+    val gravityTimestampNanos: Long? = null,
     val linearAccelerationSensor: Vec3? = null,
+    val linearAccelerationTimestampNanos: Long? = null,
     val rotationVector: Vec3? = null,
+    val rotationVectorTimestampNanos: Long? = null,
     val proximityCm: Float? = null,
     val stepDetected: Boolean = false
 )
@@ -53,22 +58,28 @@ class MotionPreprocessor(private val imu: ImuProcessor = ImuProcessor()) {
         val dt = if (lastTimestamp < 0L) 0.02 else (sample.timestampNanos - lastTimestamp) / 1e9
         if (dt > 0.5) imu.reset()
         lastTimestamp = sample.timestampNanos
-        val processed = imu.process(
-            sample.timestampNanos,
-            sample.accelerometer,
-            sample.gyroscope,
-            sample.gravitySensor,
-            sample.linearAccelerationSensor
-        )
-        val gravity = sample.gravitySensor?.takeIf { it.isFinite() } ?: processed.gravity
+        fun fresh(sourceTimestamp: Long?, maxAgeNanos: Long): Boolean = sourceTimestamp == null ||
+            kotlin.math.abs(sample.timestampNanos - sourceTimestamp) <= maxAgeNanos
+        val accelFresh = fresh(sample.accelerometerTimestampNanos, 100_000_000L)
+        if (!accelFresh) return null
+        val gyroFresh = fresh(sample.gyroscopeTimestampNanos, 120_000_000L)
+        val gravityFresh = fresh(sample.gravityTimestampNanos, 300_000_000L)
+        val linearFresh = fresh(sample.linearAccelerationTimestampNanos, 120_000_000L)
+        val rotationFresh = fresh(sample.rotationVectorTimestampNanos, 300_000_000L)
+        val gyro = if (gyroFresh) sample.gyroscope else Vec3()
+        val hardwareGravity = sample.gravitySensor?.takeIf { gravityFresh && it.isFinite() }
+        val hardwareLinear = sample.linearAccelerationSensor?.takeIf { linearFresh && it.isFinite() }
+        val processed = imu.process(sample.timestampNanos, sample.accelerometer, gyro, hardwareGravity, hardwareLinear)
+        val gravity = hardwareGravity ?: processed.gravity
         val (pitch, roll) = imu.orientationFromGravity(gravity)
-        val orientation = sample.rotationVector?.let(SensorFusionEngine::orientationFromRotationVector)
-            ?: Vec3(roll, pitch, 0f)
-        val quality = when {
+        val orientation = sample.rotationVector?.takeIf { rotationFresh && it.isFinite() }
+            ?.let(SensorFusionEngine::orientationFromRotationVector) ?: Vec3(roll, pitch, 0f)
+        val baseQuality = when {
             dt > 0.5 || dt < 0.001 -> 0f
             !processed.linearAccel.isFinite() || !processed.gyro.isFinite() -> 0f
             else -> (1f - (dt / 0.1).toFloat() * 0.2f).coerceIn(0.5f, 1f)
         }
+        val quality = if (sample.gyroscopeTimestampNanos != null && !gyroFresh) minOf(baseQuality, 0.4f) else baseQuality
         return MotionFrame(
             sample.timestampNanos,
             processed.accel,
