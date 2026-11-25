@@ -22,10 +22,18 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      # GitHub's ubuntu-latest image includes Android command-line tools and
-      # a preconfigured ANDROID_HOME; install only the SDK platform/build tools.
-      - name: Install Android SDK packages
-        run: sdkmanager --install "platforms;android-34" "build-tools;34.0.0" "platform-tools"
+      - name: Locate and install Android SDK packages
+        shell: bash
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager -print -quit 2>/dev/null || true)"
+          if [[ -z "$SDKMANAGER" ]]; then
+            echo "Android sdkmanager was not found under $SDK_ROOT/cmdline-tools" >&2
+            find "$SDK_ROOT" -maxdepth 4 -type f -name sdkmanager -print 2>/dev/null || true
+            exit 1
+          fi
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" --install "platforms;android-34" "build-tools;34.0.0" "platform-tools"
 
       - name: Run unit tests
         run: ./gradlew --no-daemon testDebugUnitTest --stacktrace
