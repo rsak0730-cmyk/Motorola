@@ -66,6 +66,13 @@ class CalibrationStore private constructor(private val profiles: MutableMap<Gest
         return (confidence * (0.65f + margin * 0.35f)).coerceIn(0f, 1f)
     }
 
+    /** Best positive-template distance; 1 means there is no usable profile. */
+    fun matchScore(gesture: GestureType, features: List<Vec3>): Float {
+        val templates = profileFor(gesture).positives
+        if (templates.isEmpty() || features.isEmpty()) return 1f
+        return templates.minOf { DtwMatcher.distance(features, it) }
+    }
+
     fun clear(gesture: GestureType) { profiles.remove(gesture) }
     fun clearAll() { profiles.clear() }
 

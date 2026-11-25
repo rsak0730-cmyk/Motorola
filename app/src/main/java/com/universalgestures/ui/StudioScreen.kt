@@ -109,19 +109,33 @@ fun StudioScreen(
                         if (!recording) {
                             samples.clear()
                             val sensorHub = SensorHub(context.applicationContext)
+                            val labPipeline = RecognitionPipeline(
+                                configs = state.configs,
+                                calibration = CalibrationStore.fromJson(state.calibrationJson),
+                                profile = state.recognitionProfile,
+                                globalSensitivity = state.globalSensitivity,
+                                accuracyMode = state.accuracyMode
+                            )
+                            var lastUiUpdateMs = 0L
                             hub.value = sensorHub
                             recording = true
                             liveText = "Waiting for sensor samples…"
                             sensorHub.start(listener = { sample ->
                                 samples.add(sample)
                                 if (samples.size > 5000) samples.removeAt(0)
-                                liveText = buildString {
-                                    appendLine("Accel: ${vec(sample.accel)}")
-                                    appendLine("Gyro: ${vec(sample.gyro)}")
-                                    appendLine("Gravity: ${vec(sample.gravity)}")
-                                    appendLine("Linear accel: ${vec(sample.linearAccel)}")
-                                    appendLine("Proximity: ${sample.proximityCm?.let { "${it} cm" } ?: "not available"}")
-                                    appendLine("Samples: ${samples.size} · Sensor rate: ${"%.1f".format(sensorHub.samplingHz)} Hz")
+                                val result = labPipeline.onSample(sample)
+                                if (sample.timestampMs - lastUiUpdateMs >= 200L) {
+                                    lastUiUpdateMs = sample.timestampMs
+                                    liveText = buildString {
+                                        appendLine("Accel: ${vec(sample.accel)}")
+                                        appendLine("Gyro: ${vec(sample.gyro)}")
+                                        appendLine("Gravity: ${vec(sample.gravity)}")
+                                        appendLine("Linear accel: ${vec(sample.linearAccel)}")
+                                        appendLine("Proximity: ${sample.proximityCm?.let { "${it} cm" } ?: "not available"}")
+                                        appendLine("Samples: ${samples.size} · Sensor rate: ${"%.1f".format(sensorHub.samplingHz)} Hz")
+                                        appendLine("Recognition: ${result.event?.type?.name ?: "none"} · confidence=${result.event?.confidence ?: 0f}")
+                                        appendLine("Rejection: ${result.rejectionReason} ${result.detail}")
+                                    }
                                 }
                             })
                         } else {
