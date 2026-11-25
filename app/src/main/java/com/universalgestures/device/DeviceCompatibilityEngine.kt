@@ -28,7 +28,7 @@ class DeviceCompatibilityEngine(private val context: Context) {
         val hasFlash = try {
             val cm = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
             cm.cameraIdList.any { id ->
-                cm.getCameraCharacteristics(id).get(android.hardware.camera2.CameraCharacteristics.FLASH_AVAILABLE) == true
+                cm.getCameraCharacteristics(id).get(android.hardware.camera2.CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
             }
         } catch (e: Exception) {
             false

@@ -1,6 +1,7 @@
 package com.universalgestures.ui
 
 import android.content.Context
+import android.hardware.Sensor
 import android.hardware.SensorManager
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column

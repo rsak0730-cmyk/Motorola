@@ -44,7 +44,7 @@ class GestureAccessibilityService : AccessibilityService() {
             takeScreenshot(
                 android.view.Display.DEFAULT_DISPLAY,
                 screenshotExecutor,
-                object : TakeScreenshotCallback() {
+                object : TakeScreenshotCallback {
                     override fun onSuccess(screenshot: ScreenshotResult) {
                         var bitmap: Bitmap? = null
                         var uri: android.net.Uri? = null

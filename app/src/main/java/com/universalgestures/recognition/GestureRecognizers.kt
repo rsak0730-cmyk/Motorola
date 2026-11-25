@@ -4,6 +4,7 @@ import com.universalgestures.core.GestureType
 import com.universalgestures.core.MotionSegment
 import com.universalgestures.core.SensorSample
 import com.universalgestures.core.Vec3
+import com.universalgestures.sensors.MotionSegmenter
 import kotlin.math.abs
 
 /**

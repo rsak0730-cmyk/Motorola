@@ -61,7 +61,7 @@ class ActionExecutor(private val context: Context) {
         val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as? CameraManager
             ?: return ActionResult(false, "Camera service unavailable")
         val cameraId = cameraManager.cameraIdList.firstOrNull { id ->
-            cameraManager.getCameraCharacteristics(id).get(CameraCharacteristics.FLASH_AVAILABLE) == true
+            cameraManager.getCameraCharacteristics(id).get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
         } ?: return ActionResult(false, "No flash-capable camera on this device")
         flashOn = !flashOn
         cameraManager.setTorchMode(cameraId, flashOn)
