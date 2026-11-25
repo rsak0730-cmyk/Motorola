@@ -112,7 +112,7 @@ fun StudioScreen(
                             hub.value = sensorHub
                             recording = true
                             liveText = "Waiting for sensor samples…"
-                            sensorHub.start { sample ->
+                            sensorHub.start(listener = { sample ->
                                 samples.add(sample)
                                 if (samples.size > 5000) samples.removeAt(0)
                                 liveText = buildString {
@@ -123,7 +123,7 @@ fun StudioScreen(
                                     appendLine("Proximity: ${sample.proximityCm?.let { "${it} cm" } ?: "not available"}")
                                     appendLine("Samples: ${samples.size} · Sensor rate: ${"%.1f".format(sensorHub.samplingHz)} Hz")
                                 }
-                            }
+                            })
                         } else {
                             hub.value?.stop()
                             hub.value = null
