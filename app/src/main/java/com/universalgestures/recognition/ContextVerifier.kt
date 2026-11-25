@@ -82,6 +82,22 @@ class ContextVerifier {
         return true
     }
 
+    /** Locomotion increases the evidence bar rather than disabling every gesture. */
+    fun confidenceMultiplier(gesture: GestureType, nowMs: Long): Float {
+        val sensitive = gesture in setOf(
+            GestureType.SINGLE_CHOP, GestureType.DOUBLE_CHOP, GestureType.SHAKE,
+            GestureType.DOUBLE_SHAKE, GestureType.TRIPLE_SHAKE,
+            GestureType.DOUBLE_TWIST, GestureType.TRIPLE_TWIST
+        )
+        if (!sensitive) return 1f
+        val cadence = stepsPerMinute(nowMs)
+        return when {
+            cadence > 150f -> 0.68f
+            cadence > 60f -> 0.86f
+            else -> 1f
+        }
+    }
+
     fun reset() {
         stepTimes.clear()
         recentEnergy.clear()

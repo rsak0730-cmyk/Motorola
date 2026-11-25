@@ -26,6 +26,7 @@ class SensorHub(context: Context) : SensorEventListener {
         context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
 
     private val imu = ImuProcessor()
+    private val preprocessor = MotionPreprocessor(imu)
     private var listener: ((SensorSample) -> Unit)? = null
 
     private var accel: Sensor? = null
@@ -74,7 +75,7 @@ class SensorHub(context: Context) : SensorEventListener {
         callbackHandler: Handler = Handler(Looper.getMainLooper())
     ) {
         stop()
-        imu.reset()
+        preprocessor.reset()
         this.listener = listener
         accel = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
         gyro = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
@@ -125,17 +126,20 @@ class SensorHub(context: Context) : SensorEventListener {
 
     private fun emit(timestampNanos: Long) {
         val cb = listener ?: return
-        val processed = imu.process(timestampNanos, lastAccel, lastGyro, lastGravity, lastLinearAccel)
-        cb(
-            SensorSample(
+        val frame = preprocessor.process(
+            MotionSample(
                 timestampNanos = timestampNanos,
-                accel = processed.accel,
-                gyro = processed.gyro,
-                gravity = lastGravity ?: processed.gravity,
-                linearAccel = processed.linearAccel,
+                accelerometer = lastAccel,
+                gyroscope = lastGyro,
+                gravitySensor = lastGravity,
+                linearAccelerationSensor = lastLinearAccel,
                 rotationVector = lastRotation,
                 proximityCm = lastProximity,
-                stepDetected = lastStepNanos != 0L && timestampNanos - lastStepNanos < 100_000_000L,
+                stepDetected = lastStepNanos != 0L && timestampNanos - lastStepNanos < 100_000_000L
+            )
+        ) ?: return
+        cb(
+            frame.toSensorSample(lastRotation).copy(
                 pickupDetected = false,
                 tiltDetected = false,
                 significantMotion = false

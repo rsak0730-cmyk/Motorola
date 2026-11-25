@@ -86,12 +86,19 @@ class PreferencesRepository(private val context: Context) {
     suspend fun addCalibrationExample(
         gesture: GestureType,
         positive: Boolean,
-        features: List<com.universalgestures.core.Vec3>
+        features: List<com.universalgestures.core.Vec3>,
+        motionFeatures: List<com.universalgestures.recognition.MotionFeature> = emptyList()
     ): String {
         var updated = "{}"
         context.dataStore.edit { prefs ->
             val store = com.universalgestures.recognition.CalibrationStore.fromJson(prefs[keyCalibration] ?: "{}")
-            if (positive) store.addPositive(gesture, features) else store.addNegative(gesture, features)
+            if (positive) {
+                store.addPositive(gesture, features)
+                store.addMotionPositive(gesture, motionFeatures)
+            } else {
+                store.addNegative(gesture, features)
+                store.addMotionNegative(gesture, motionFeatures)
+            }
             updated = store.toJson()
             prefs[keyCalibration] = updated
         }

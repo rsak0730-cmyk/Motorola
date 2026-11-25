@@ -41,11 +41,15 @@ data class SensorSample(
     val gravity: Vec3 = Vec3(),
     val linearAccel: Vec3 = Vec3(),
     val rotationVector: Vec3? = null,
+    /** Fused roll, pitch, yaw radians when available. */
+    val orientation: Vec3? = null,
     val proximityCm: Float? = null,
     val stepDetected: Boolean = false,
     val pickupDetected: Boolean = false,
     val tiltDetected: Boolean = false,
-    val significantMotion: Boolean = false
+    val significantMotion: Boolean = false,
+    /** Timestamp/fusion quality 0..1; zero denotes a discontinuity/untrusted frame. */
+    val quality: Float = 1f
 ) {
     val timestampMs: Long get() = timestampNanos / 1_000_000L
 }
@@ -117,7 +121,8 @@ data class GestureEvent(
     val type: GestureType,
     val confidence: Float,
     val timestampMs: Long,
-    val latencyMs: Long = 0L
+    val latencyMs: Long = 0L,
+    val sequenceId: Long = 0L
 )
 
 enum class RejectionReason {

@@ -137,10 +137,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun addCalibrationExample(type: GestureType, positive: Boolean, features: List<Vec3>) {
-        if (features.isEmpty()) return
+    fun addCalibrationExample(
+        type: GestureType,
+        positive: Boolean,
+        features: List<Vec3>,
+        motionFeatures: List<com.universalgestures.recognition.MotionFeature>
+    ) {
+        if (features.isEmpty() && motionFeatures.isEmpty()) return
         viewModelScope.launch {
-            val json = prefs.addCalibrationExample(type, positive, features)
+            val json = prefs.addCalibrationExample(type, positive, features, motionFeatures)
             val store = CalibrationStore.fromJson(json)
             val updated = _state.value.configs[type]?.copy(calibrated = store.isCalibrated(type))
             if (updated != null) updateConfig(updated)

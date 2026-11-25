@@ -18,6 +18,7 @@ class PrecisionGate(
     private val minConfidence: Float = 0.6f,
     private val duplicateCooldownMs: Long = 1200L
 ) {
+    val minimumConfidence: Float get() = minConfidence
     private val lastAccepted = mutableMapOf<GestureType, Long>()
     private var lastAnyAcceptedMs = -1L
 
@@ -28,7 +29,8 @@ class PrecisionGate(
         segmentComplete: Boolean,
         sensorQualityOk: Boolean,
         actionEligible: Boolean,
-        cooldownFor: (GestureType) -> Long = { duplicateCooldownMs }
+        cooldownFor: (GestureType) -> Long = { duplicateCooldownMs },
+        sequenceId: Long = 0L
     ): RecognitionResult {
         if (!sensorQualityOk) {
             return RecognitionResult(rejectionReason = RejectionReason.SENSOR_QUALITY_LOW, detail = "sensor quality insufficient")
@@ -40,7 +42,7 @@ class PrecisionGate(
             return RecognitionResult(rejectionReason = RejectionReason.SEGMENT_INCOMPLETE, detail = "segment incomplete")
         }
         // Ambiguity: two different gestures above threshold -> reject.
-        val strong = candidates.filter { it.confidence >= minConfidence }
+        val strong = candidates.filter { it.confidence >= minimumConfidence }
         val distinct = strong.map { it.type }.distinct()
         if (distinct.size > 1) {
             return RecognitionResult(rejectionReason = RejectionReason.AMBIGUOUS, detail = "ambiguous: $distinct")
@@ -64,7 +66,7 @@ class PrecisionGate(
         lastAccepted[best.type] = now
         lastAnyAcceptedMs = now
         return RecognitionResult(
-            event = GestureEvent(best.type, best.confidence, now),
+            event = GestureEvent(best.type, best.confidence, now, sequenceId = sequenceId),
             rejectionReason = RejectionReason.NONE,
             detail = best.detail
         )

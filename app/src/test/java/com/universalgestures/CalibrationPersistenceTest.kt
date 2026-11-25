@@ -3,6 +3,7 @@ package com.universalgestures
 import com.universalgestures.core.GestureType
 import com.universalgestures.core.Vec3
 import com.universalgestures.recognition.CalibrationStore
+import com.universalgestures.recognition.MotionFeature
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -23,6 +24,21 @@ class CalibrationPersistenceTest {
         assertEquals(1, result.negatives.size)
         assertTrue(result.calibrated)
         assertEquals(positive[0], result.positives.first()[0])
+    }
+
+    @Test
+    fun multivariateTemplatesPersistAndAreCalibrated() {
+        val a = MotionFeature(List(11) { if (it == 0) 0.25f else 0f })
+        val b = MotionFeature(List(11) { if (it == 0) 0.3f else 0f })
+        val original = CalibrationStore()
+        original.addMotionPositive(GestureType.SHAKE, listOf(a, b, a))
+        original.addMotionPositive(GestureType.SHAKE, listOf(a, a, b))
+        original.addMotionNegative(GestureType.SHAKE, listOf(MotionFeature(List(11) { 0.8f }), MotionFeature(List(11) { 0.7f })))
+        val restored = CalibrationStore.fromJson(original.toJson())
+        val profile = restored.profileFor(GestureType.SHAKE)
+        assertEquals(2, profile.motionPositives.size)
+        assertEquals(1, profile.motionNegatives.size)
+        assertTrue(restored.isCalibrated(GestureType.SHAKE))
     }
 
     @Test

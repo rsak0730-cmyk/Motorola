@@ -21,6 +21,7 @@ class ImuProcessor {
     private var filteredAccel = Vec3()
     private var filteredGyro = Vec3()
     private var gravityEstimate = Vec3(0f, 0f, 9.81f)
+    private val gravityEstimator = GravityEstimator(timeConstant = 0.8)
     private var gyroBias = Vec3()
     private var lastTimestampNanos: Long = -1L
     private var samplingHzEma = 0f
@@ -36,6 +37,7 @@ class ImuProcessor {
         filteredAccel = Vec3()
         filteredGyro = Vec3()
         gravityEstimate = Vec3(0f, 0f, 9.81f)
+        gravityEstimator.reset()
         gyroBias = Vec3()
         lastTimestampNanos = -1L
         samplingHzEma = 0f
@@ -65,8 +67,11 @@ class ImuProcessor {
             resetCount++
             filteredAccel = accel
             filteredGyro = gyro
+            gravityEstimator.reset()
+            val estimate = gravityEstimator.update(accel.x, accel.y, accel.z, 0.02)
+            gravityEstimate = Vec3(estimate[0].toFloat(), estimate[1].toFloat(), estimate[2].toFloat())
             lastTimestampNanos = timestampNanos
-            return ProcessedImu(filteredAccel, filteredGyro, accel - gravityEstimate, gravityEstimate, true)
+            return ProcessedImu(filteredAccel, filteredGyro, Vec3(), gravityEstimate, true)
         }
         if (dtNanos > 0) {
             val hz = 1e9f / dtNanos.toFloat()
@@ -82,12 +87,20 @@ class ImuProcessor {
 
         // Gravity estimation: slow low-pass on the accelerometer, anchored
         // by the hardware gravity sensor when available.
-        if (hardwareGravity != null) {
-            gravityEstimate = gravityEstimate * 0.7f + hardwareGravity * 0.3f
-        } else {
-            val gAlpha = 0.08f
-            gravityEstimate = gravityEstimate * (1f - gAlpha) + accel * gAlpha
-        }
+        val dtSeconds = if (dtNanos > 0L) dtNanos / 1_000_000_000.0 else 0.02
+        val softwareGravity = gravityEstimator.update(accel.x, accel.y, accel.z, dtSeconds)
+        gravityEstimate = if (hardwareGravity != null && hardwareGravity.x.isFinite() &&
+            hardwareGravity.y.isFinite() && hardwareGravity.z.isFinite()
+        ) {
+            // Use the OS fused gravity sensor as the anchor, with a conservative
+            // correction toward the timestamp-aware software estimate.
+            val hw = hardwareGravity
+            Vec3(
+                hw.x * 0.8f + softwareGravity[0].toFloat() * 0.2f,
+                hw.y * 0.8f + softwareGravity[1].toFloat() * 0.2f,
+                hw.z * 0.8f + softwareGravity[2].toFloat() * 0.2f
+            )
+        } else Vec3(softwareGravity[0].toFloat(), softwareGravity[1].toFloat(), softwareGravity[2].toFloat())
 
         // Gyro bias calibration while still (magnitude below 0.02 rad/s).
         val gyroMag = filteredGyro.magnitude

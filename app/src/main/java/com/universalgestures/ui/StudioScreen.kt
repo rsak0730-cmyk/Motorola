@@ -41,6 +41,7 @@ import com.universalgestures.core.Vec3
 import com.universalgestures.recognition.CalibrationStore
 import com.universalgestures.recognition.RecognitionPipeline
 import com.universalgestures.recognition.DtwMatcher
+import com.universalgestures.recognition.MotionFeatureExtractor
 import com.universalgestures.sensors.SensorHub
 import kotlin.math.sqrt
 
@@ -51,7 +52,7 @@ fun StudioScreen(
     state: UiState,
     onUpdateConfig: (GestureConfig) -> Unit,
     onSetProfile: (RecognitionProfile) -> Unit,
-    onAddCalibrationExample: (GestureType, Boolean, List<Vec3>) -> Unit
+    onAddCalibrationExample: (GestureType, Boolean, List<Vec3>, List<com.universalgestures.recognition.MotionFeature>) -> Unit
 ) {
     val context = LocalContext.current
     var recording by remember { mutableStateOf(false) }
@@ -229,7 +230,8 @@ fun StudioScreen(
                         if (features.isEmpty()) note = "Record sensor data before adding an example."
                         else {
                             calibration.addPositive(selectedGesture, features)
-                            onAddCalibrationExample(selectedGesture, true, features)
+                            val multiFeatures = MotionFeatureExtractor.extract(samples.takeLast(120))
+                            onAddCalibrationExample(selectedGesture, true, features, multiFeatures)
                             note = "Positive example saved locally (${calibration.profileFor(selectedGesture).positives.size})."
                         }
                     }) { Text("Add positive") }
@@ -238,7 +240,8 @@ fun StudioScreen(
                         if (features.isEmpty()) note = "Record sensor data before adding an example."
                         else {
                             calibration.addNegative(selectedGesture, features)
-                            onAddCalibrationExample(selectedGesture, false, features)
+                            val multiFeatures = MotionFeatureExtractor.extract(samples.takeLast(120))
+                            onAddCalibrationExample(selectedGesture, false, features, multiFeatures)
                             note = "Negative example saved locally (${calibration.profileFor(selectedGesture).negatives.size})."
                         }
                     }) { Text("Add negative") }

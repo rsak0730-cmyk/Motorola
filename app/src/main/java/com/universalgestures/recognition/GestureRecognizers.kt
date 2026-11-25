@@ -15,7 +15,13 @@ import kotlin.math.abs
  * conservative: ambiguous or incomplete evidence yields no candidate and
  * the Precision Gate (PGI) rejects it downstream.
  */
-data class Candidate(val type: GestureType, val confidence: Float, val detail: String = "")
+data class Candidate(
+    val type: GestureType,
+    val confidence: Float,
+    val detail: String = "",
+    val detectedAtMs: Long = 0L,
+    val sequenceId: Long = 0L
+)
 
 interface GestureRecognizer {
     fun onSample(sample: SensorSample): Candidate?
