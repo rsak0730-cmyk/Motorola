@@ -182,8 +182,15 @@ data class DeviceProfile(
     val hasFlash: Boolean,
     val hasCamera: Boolean,
     val batteryOptimisationExempt: Boolean,
-    val manufacturerGuidance: String
-)
+    val manufacturerGuidance: String,
+    /** Runtime-reported Android build fingerprint label (Build.DISPLAY), not a guessed UI version. */
+    val firmwareBuild: String = "Unknown",
+    val securityPatch: String = "Unknown",
+    val manufacturerUiVersion: String = "Not exposed by public Android APIs"
+) {
+    val isTargetSamsungA146B: Boolean
+        get() = manufacturer.equals("samsung", ignoreCase = true) && model.contains("SM-A146B", ignoreCase = true)
+}
 
 data class DiagnosticSnapshot(
     val timestampMs: Long,

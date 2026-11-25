@@ -70,6 +70,21 @@ fun StudioScreen(
         cameraActive = granted
         cameraMessage = if (granted) "Camera analysis enabled while this screen is visible." else "Camera permission denied; camera analysis remains off."
     }
+    var pendingExport by remember { mutableStateOf<List<SensorSample>>(emptyList()) }
+    var exportMessage by remember { mutableStateOf("") }
+    val csvExportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+        if (uri == null) {
+            exportMessage = "Export cancelled."
+        } else {
+            exportMessage = runCatching {
+                val csv = sensorSamplesCsv(pendingExport)
+                context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(csv) }
+                    ?: error("Could not open the selected destination")
+                "Exported ${pendingExport.size} sensor frames."
+            }.getOrElse { "Export failed: ${it.message ?: "unknown error"}" }
+            pendingExport = emptyList()
+        }
+    }
     val calibration = remember(state.calibrationJson) { CalibrationStore.fromJson(state.calibrationJson) }
     val samples = remember { mutableListOf<SensorSample>() }
     val replay = remember { mutableListOf<SensorSample>() }
@@ -171,6 +186,16 @@ fun StudioScreen(
                     }) { Text("Run replay") }
                     OutlinedButton(onClick = { liveText = compareSamples(samples, replay) }) { Text("Compare") }
                 }
+                OutlinedButton(
+                    onClick = {
+                        pendingExport = samples.toList()
+                        if (pendingExport.isEmpty()) exportMessage = "Record sensor data before exporting."
+                        else csvExportLauncher.launch("universal-gestures-session.csv")
+                    },
+                    enabled = !recording
+                ) { Text("Export CSV…") }
+                if (exportMessage.isNotEmpty()) Text(exportMessage, style = MaterialTheme.typography.bodySmall)
+                Text("CSV contains timestamped motion sensor values only. Export happens only after you choose a destination.", style = MaterialTheme.typography.bodySmall)
             }
         }
 
@@ -226,32 +251,36 @@ fun StudioScreen(
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = {
-                        val features = DtwMatcher.featureSequence(samples.takeLast(120))
-                        if (features.isEmpty()) note = "Record sensor data before adding an example."
+                        val recent = samples.takeLast(120)
+                        val features = DtwMatcher.featureSequence(recent)
+                        val multiFeatures = MotionFeatureExtractor.extract(recent)
+                        if (features.isEmpty() && multiFeatures.isEmpty()) note = "Record sensor data before adding an example."
                         else {
-                            calibration.addPositive(selectedGesture, features)
-                            val multiFeatures = MotionFeatureExtractor.extract(samples.takeLast(120))
+                            if (features.isNotEmpty()) calibration.addPositive(selectedGesture, features)
+                            if (multiFeatures.isNotEmpty()) calibration.addMotionPositive(selectedGesture, multiFeatures)
                             onAddCalibrationExample(selectedGesture, true, features, multiFeatures)
-                            note = "Positive example saved locally (${calibration.profileFor(selectedGesture).positives.size})."
+                            note = "Positive example saved locally (${calibration.profileFor(selectedGesture).positives.size} legacy · ${calibration.profileFor(selectedGesture).motionPositives.size} multivariate)."
                         }
                     }) { Text("Add positive") }
                     OutlinedButton(onClick = {
-                        val features = DtwMatcher.featureSequence(samples.takeLast(120))
-                        if (features.isEmpty()) note = "Record sensor data before adding an example."
+                        val recent = samples.takeLast(120)
+                        val features = DtwMatcher.featureSequence(recent)
+                        val multiFeatures = MotionFeatureExtractor.extract(recent)
+                        if (features.isEmpty() && multiFeatures.isEmpty()) note = "Record sensor data before adding an example."
                         else {
-                            calibration.addNegative(selectedGesture, features)
-                            val multiFeatures = MotionFeatureExtractor.extract(samples.takeLast(120))
+                            if (features.isNotEmpty()) calibration.addNegative(selectedGesture, features)
+                            if (multiFeatures.isNotEmpty()) calibration.addMotionNegative(selectedGesture, multiFeatures)
                             onAddCalibrationExample(selectedGesture, false, features, multiFeatures)
-                            note = "Negative example saved locally (${calibration.profileFor(selectedGesture).negatives.size})."
+                            note = "Negative example saved locally (${calibration.profileFor(selectedGesture).negatives.size} legacy · ${calibration.profileFor(selectedGesture).motionNegatives.size} multivariate)."
                         }
                     }) { Text("Add negative") }
                 }
-                Text("Positive ${calibration.profileFor(selectedGesture).positives.size} · Negative ${calibration.profileFor(selectedGesture).negatives.size}")
+                Text("Legacy templates: +${calibration.profileFor(selectedGesture).positives.size} / −${calibration.profileFor(selectedGesture).negatives.size} · Multivariate templates: +${calibration.profileFor(selectedGesture).motionPositives.size} / −${calibration.profileFor(selectedGesture).motionNegatives.size}")
                 if (note.isNotEmpty()) Text(note, style = MaterialTheme.typography.bodySmall)
                 Button(onClick = {
                     val profile = calibration.profileFor(selectedGesture)
                     val config = state.configs[selectedGesture]
-                    if (config == null || profile.positives.isEmpty()) {
+                    if (config == null || (profile.positives.isEmpty() && profile.motionPositives.isEmpty())) {
                         note = "Add at least one positive sample before saving calibration."
                     } else {
                         onUpdateConfig(config.copy(calibrated = profile.calibrated))
@@ -261,6 +290,22 @@ fun StudioScreen(
                 }) { Text("Apply calibration status") }
             }
         }
+    }
+}
+
+private fun sensorSamplesCsv(samples: List<SensorSample>): String = buildString {
+    appendLine("timestamp_nanos,accel_x,accel_y,accel_z,gyro_x,gyro_y,gyro_z,gravity_x,gravity_y,gravity_z,linear_x,linear_y,linear_z,orientation_roll,orientation_pitch,orientation_yaw,proximity_cm,quality,step_detected")
+    samples.forEach { sample ->
+        val orientation = sample.orientation
+        appendLine(listOf(
+            sample.timestampNanos,
+            sample.accel.x, sample.accel.y, sample.accel.z,
+            sample.gyro.x, sample.gyro.y, sample.gyro.z,
+            sample.gravity.x, sample.gravity.y, sample.gravity.z,
+            sample.linearAccel.x, sample.linearAccel.y, sample.linearAccel.z,
+            orientation?.x ?: "", orientation?.y ?: "", orientation?.z ?: "",
+            sample.proximityCm ?: "", sample.quality, sample.stepDetected
+        ).joinToString(","))
     }
 }
 

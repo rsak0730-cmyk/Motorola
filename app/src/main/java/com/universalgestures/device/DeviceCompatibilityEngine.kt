@@ -49,7 +49,9 @@ class DeviceCompatibilityEngine(private val context: Context) {
             hasFlash = hasFlash,
             hasCamera = hasCamera,
             batteryOptimisationExempt = exempt,
-            manufacturerGuidance = guidanceFor(Build.MANUFACTURER ?: "")
+            manufacturerGuidance = guidanceFor(Build.MANUFACTURER ?: ""),
+            firmwareBuild = Build.DISPLAY ?: "Unknown",
+            securityPatch = Build.VERSION.SECURITY_PATCH ?: "Unknown"
         )
     }
 

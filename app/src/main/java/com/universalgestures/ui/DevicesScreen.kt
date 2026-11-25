@@ -41,7 +41,13 @@ fun DevicesScreen(state: UiState) {
                 Text("This device", style = MaterialTheme.typography.titleMedium)
                 if (profile != null) {
                     Text("${profile.manufacturer} ${profile.model}")
+                    Text(if (profile.isTargetSamsungA146B) "Target match: Samsung Galaxy A14 5G (SM-A146B) detected at runtime" else "Target match: SM-A146B not verified on this runtime device")
                     Text("Android ${profile.androidVersion} · API ${profile.apiLevel}")
+                    Text("Firmware build: ${profile.firmwareBuild}")
+                    Text("Android security patch: ${profile.securityPatch}")
+                    if (profile.manufacturer.equals("samsung", ignoreCase = true)) {
+                        Text("One UI version: ${profile.manufacturerUiVersion}")
+                    }
                     Text("Sensors: ${profile.sensorCount} · Flash: ${profile.hasFlash} · Camera: ${profile.hasCamera}")
                     Text("Battery optimisation exempt: ${profile.batteryOptimisationExempt}")
                 }
